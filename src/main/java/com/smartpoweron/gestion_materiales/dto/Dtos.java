@@ -163,6 +163,7 @@ public class Dtos {
         private Long idMaterial;
         private String codigoMaterial;
         private String nombreMaterial;
+        private String modelo; // <-- Añadido (error MaterialService:271)
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -213,6 +214,7 @@ public class Dtos {
         private Long idMaterial;
         private String codigoMaterial;
         private String nombreMaterial;
+        private String categoria; // <-- Añadido (error MaterialService:441)
         private Integer cantidad;
         private BigDecimal precioUnitario;
     }
@@ -248,7 +250,7 @@ public class Dtos {
         private String rucCliente;
         private Long idEmpresa;
         private LocalDate fechaInicio;
-        private BigDecimal presupuesto;   // ← BigDecimal
+        private BigDecimal presupuesto;
         private String estado;
     }
 
@@ -258,10 +260,9 @@ public class Dtos {
         private String cliente;
         private Long idEmpresa;
         private LocalDate fechaInicio;
-        private BigDecimal presupuesto;   // ← BigDecimal
+        private BigDecimal presupuesto;
     }
 
-    // --- Solicitudes (TODOS los campos que usa SolicitudService) ---
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class SolicitudDto {
         private Long idSolicitud;
@@ -270,14 +271,14 @@ public class Dtos {
         private String cliente;
         private Long idUsuarioSolicitante;
         private String solicitante;
-        private Long idUsuarioAprobador;       // ← faltaba
-        private LocalDateTime fechaSolicitud;  // ← faltaba
-        private BigDecimal costoTotal;         // ← faltaba
-        private BigDecimal presupuesto;        // ← faltaba
+        private Long idUsuarioAprobador;
+        private LocalDateTime fechaSolicitud;
+        private BigDecimal costoTotal;
+        private BigDecimal presupuesto;
         private String estado;
         private Boolean anulada;
-        private String motivoAnulacion;        // ← faltaba
-        private boolean editable;              // ← faltaba
+        private String motivoAnulacion;
+        private boolean editable;
         private List<DetalleSolicitudDto> detalle;
     }
 
@@ -300,10 +301,10 @@ public class Dtos {
         private Long idMaterial;
         private String codigoMaterial;
         private String nombreMaterial;
-        private Integer cantidad;              // ← opcional, por compatibilidad
-        private Integer cantidadSolicitada;    // ← faltaba en versiones previas
-        private Integer cantidadDespachada;    // ← faltaba
-        private Integer saldoPendiente;        // ← faltaba
+        private Integer cantidad;
+        private Integer cantidadSolicitada;
+        private Integer cantidadDespachada;
+        private Integer saldoPendiente;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -319,9 +320,9 @@ public class Dtos {
         private String nombre;
         private String codigoMaterial;
         private Integer cantidadFaltante;
-        private Integer cantidadSolicitada;   // ← ya estaba
-        private Integer stockActual;          // ← faltaba
-        private Integer faltante;             // ← faltaba
+        private Integer cantidadSolicitada;
+        private Integer stockActual;
+        private Integer faltante;
     }
 
     // --- Calidad ---
@@ -335,6 +336,7 @@ public class Dtos {
         private String unidad;
         private BigDecimal valorMedido;
         private BigDecimal valorMinimo;
+        private BigDecimal valorMaximo; // <-- Añadido (error CalidadService:237)
         private String normaReferencia;
         private String estado;
         private Boolean anulada;
@@ -357,6 +359,7 @@ public class Dtos {
         private String unidad;
         private BigDecimal valorMinimo;
         private BigDecimal valorMaximo;
+        private String normaReferencia; // <-- Añadido (error CalidadService:256)
         private Boolean activo;
     }
 
@@ -388,6 +391,7 @@ public class Dtos {
         private String cliente;
         private LocalDateTime fechaSolicitud;
         private int totalPendiente;
+        private boolean esParcial; // <-- Añadido (error DespachoService:100)
         private String estado;
     }
 
@@ -413,7 +417,8 @@ public class Dtos {
         private String tipo;
         private String estado;
         private Boolean anulado;
-        private String motivoAnulacion;   // ← ya estaba
+        private String motivoAnulacion;
+        private LocalDateTime fechaDespacho; // <-- Añadido (error DespachoService:435)
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -437,6 +442,7 @@ public class Dtos {
         private String proyecto;
         private LocalDateTime fechaDespacho;
         private String tipo;
+        private int totalEntregado; // <-- Añadido (error DespachoService:357)
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -446,6 +452,7 @@ public class Dtos {
         private Long idDetalleSolicitud;
         private String codigoMaterial;
         private String codigoDigitado;
+        private String codigoEsperado; // <-- Añadido (error DespachoService:423)
         private Integer cantidad;
     }
 
@@ -488,6 +495,7 @@ public class Dtos {
         private String nombreMaterial;
         private String tipo;
         private Integer cantidad;
+        private String motivo; // <-- Añadido (error MermaService:261)
     }
 
     // --- Trazabilidad ---
@@ -499,5 +507,6 @@ public class Dtos {
         private String tipoMovimiento;
         private String accion;
         private Integer cantidad;
+        private String usuario; // <-- Añadido (error TrazabilidadService:84)
     }
 }

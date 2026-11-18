@@ -3,6 +3,7 @@ package com.smartpoweron.gestion_materiales.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "pruebas_calidad")
@@ -17,9 +18,13 @@ public class PruebaCalidad {
 
     private Long idProyecto;
     private Long idParametro;
+    private Long idUsuarioInspector; // <-- Añadido (error CalidadService:81)
     private BigDecimal valorMedido;
     private String observacion;
     private String tecnicoExterno;
     private String estado;
     private Boolean anulada;
+    private String motivoAnulacion;  // <-- Añadido (error CalidadService:100,113)
+    private String resultado;        // <-- Añadido (error CalidadService:216,239)
+    private LocalDateTime fechaPrueba; // <-- Añadido (error CalidadService:243)
 }

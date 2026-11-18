@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 @Component
@@ -16,8 +18,14 @@ public class JwtUtil {
     private static final String SECRET_KEY = "SmartPowerOnClaveSecretaSuperSeguraParaJWT2026ClaveLarga12345";
     private static final Key KEY = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
 
-    public String generateToken(String username) {
+    // Firma actualizada para aceptar Long, String, String (error AuthService:65)
+    public String generateToken(Long idUsuario, String username, String rol) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("idUsuario", idUsuario);
+        claims.put("rol", rol);
+        
         return Jwts.builder()
+                .setClaims(claims)
                 .setSubject(username)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10)) // 10 horas
