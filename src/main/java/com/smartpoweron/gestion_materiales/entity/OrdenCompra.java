@@ -5,7 +5,7 @@ import lombok.*;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "ordenes_compra")
+@Table(name = "orden_compra")
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,5 +20,6 @@ public class OrdenCompra {
     private String proveedor;
     private Long idEmpresa;
     private LocalDate fechaEmision;
-    private String estado; // ABIERTA, CERRADA
+    @Builder.Default
+    private String estado = "ABIERTA"; // ABIERTA, CERRADA
 }

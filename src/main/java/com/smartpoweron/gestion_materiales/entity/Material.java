@@ -5,7 +5,7 @@ import lombok.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "materiales")
+@Table(name = "material")
 @Data
 @Builder
 @NoArgsConstructor
@@ -28,7 +28,8 @@ public class Material {
     private BigDecimal precioUnitario;
     private Integer stockActual;
     private Integer stockMinimo;
-    private String estado; // ACTIVO, INACTIVO
+    @Builder.Default
+    private String estado = "ACTIVO"; // ACTIVO, INACTIVO
     private String pasillo;
     private String estante;
     private String nivel;

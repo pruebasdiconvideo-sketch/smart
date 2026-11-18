@@ -5,7 +5,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "mermas_devoluciones")
+@Table(name = "merma_devolucion")
 @Data
 @Builder // <-- ESTO SOLUCIONA EL ERROR DE .builder()
 @NoArgsConstructor
@@ -22,7 +22,8 @@ public class MermaDevolucion {
     
     private Integer cantidad;
     private String tipo;
-    private String estado;
+    @Builder.Default
+    private String estado = "PENDIENTE";
     @Builder.Default
     private Boolean anulada = false;
     private String motivoAnulacion;

@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "proyectos")
+@Table(name = "proyecto")
 @Data
 @Builder
 @NoArgsConstructor
@@ -21,5 +21,6 @@ public class Proyecto {
     private Long idEmpresa;
     private LocalDate fechaInicio;
     private BigDecimal presupuesto;   // ← BigDecimal
-    private String estado;
+    @Builder.Default
+    private String estado = "EN_PROCESO";
 }

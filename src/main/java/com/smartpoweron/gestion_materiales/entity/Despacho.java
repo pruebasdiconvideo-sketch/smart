@@ -5,7 +5,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "despachos")
+@Table(name = "despacho")
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,7 +19,9 @@ public class Despacho {
     private Long idUsuarioAlmacenero; // <-- Añadido (error DespachoService:198)
     private LocalDateTime fechaDespacho;
     private String tipo;
-    private String estado;
-    private Boolean anulado;
+    @Builder.Default
+    private String estado = "PENDIENTE_CONFIRMACION";
+    @Builder.Default
+    private Boolean anulado = false;
     private String motivoAnulacion;
 }

@@ -5,7 +5,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "usuarios")
+@Table(name = "usuario")
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,12 +15,11 @@ public class Usuario {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idUsuario;
 
-    @Column(unique = true)
-    private String username;
     private String passwordHash;
     private String nombreCompleto;
     private String correo;
     private Long idRol;
-    private Boolean activo;
+    @Builder.Default
+    private Boolean activo = true;
     private LocalDateTime ultimoAcceso;
 }

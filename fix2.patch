@@ -1,0 +1,402 @@
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/dto/IngresoMaterialDTO.java b/src/main/java/com/smartpoweron/gestion_materiales/dto/IngresoMaterialDTO.java
+deleted file mode 100644
+index ea348be..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/dto/IngresoMaterialDTO.java
++++ /dev/null
+@@ -1,17 +0,0 @@
+-package com.smartpoweron.gestion_materiales.dto;
+-import jakarta.validation.constraints.Min;
+-import jakarta.validation.constraints.NotBlank;
+-import jakarta.validation.constraints.NotNull;
+-import lombok.Data;
+-@Data
+-public class IngresoMaterialDTO {
+-    @NotNull(message = "Debe seleccionar una orden de compra")
+-    private Long ordenCompraId;
+-
+-    @NotBlank(message = "El código del material es obligatorio")
+-    private String codigoMaterial;
+-
+-    @NotNull(message = "La cantidad es obligatoria")
+-    @Min(value = 1, message = "La cantidad debe ser mayor a 0")
+-    private Integer cantidad;
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/dto/ReposicionMaterialDTO.java b/src/main/java/com/smartpoweron/gestion_materiales/dto/ReposicionMaterialDTO.java
+deleted file mode 100644
+index c86d700..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/dto/ReposicionMaterialDTO.java
++++ /dev/null
+@@ -1,19 +0,0 @@
+-package com.smartpoweron.gestion_materiales.dto;
+-
+-import jakarta.validation.constraints.Min;
+-import jakarta.validation.constraints.NotBlank;
+-import jakarta.validation.constraints.NotNull;
+-import lombok.Data;
+-
+-@Data
+-public class ReposicionMaterialDTO {
+-    @NotNull(message = "Debe seleccionar un proyecto")
+-    private Long proyectoId;
+-
+-    @NotBlank(message = "El código del material es obligatorio")
+-    private String codigoMaterial;
+-
+-    @NotNull(message = "La cantidad es obligatoria")
+-    @Min(value = 1, message = "La cantidad debe ser mayor a 0")
+-    private Integer cantidadSobrante;
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Despacho.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Despacho.java
+index 445a9b2..cf02821 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Despacho.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Despacho.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.time.LocalDateTime;
+ 
+ @Entity
+-@Table(name = "despachos")
++@Table(name = "despacho")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -19,7 +19,9 @@ public class Despacho {
+     private Long idUsuarioAlmacenero; // <-- Añadido (error DespachoService:198)
+     private LocalDateTime fechaDespacho;
+     private String tipo;
+-    private String estado;
+-    private Boolean anulado;
++    @Builder.Default
++    private String estado = "PENDIENTE_CONFIRMACION";
++    @Builder.Default
++    private Boolean anulado = false;
+     private String motivoAnulacion;
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Empresa.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Empresa.java
+index 13dd05b..3ca385d 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Empresa.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Empresa.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.time.LocalDate;
+ 
+ @Entity
+-@Table(name = "empresas")
++@Table(name = "empresa")
+ @Data
+ @Builder
+ @NoArgsConstructor
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Material.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Material.java
+index 71d85c8..f3c34bd 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Material.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Material.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.math.BigDecimal;
+ 
+ @Entity
+-@Table(name = "materiales")
++@Table(name = "material")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -28,7 +28,8 @@ public class Material {
+     private BigDecimal precioUnitario;
+     private Integer stockActual;
+     private Integer stockMinimo;
+-    private String estado; // ACTIVO, INACTIVO
++    @Builder.Default
++    private String estado = "ACTIVO"; // ACTIVO, INACTIVO
+     private String pasillo;
+     private String estante;
+     private String nivel;
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java
+index c6aa6bc..a8c4a9d 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.time.LocalDateTime;
+ 
+ @Entity
+-@Table(name = "mermas_devoluciones")
++@Table(name = "merma_devolucion")
+ @Data
+ @Builder // <-- ESTO SOLUCIONA EL ERROR DE .builder()
+ @NoArgsConstructor
+@@ -22,7 +22,8 @@ public class MermaDevolucion {
+     
+     private Integer cantidad;
+     private String tipo;
+-    private String estado;
++    @Builder.Default
++    private String estado = "PENDIENTE";
+     @Builder.Default
+     private Boolean anulada = false;
+     private String motivoAnulacion;
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/MovimientoInventario.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/MovimientoInventario.java
+deleted file mode 100644
+index 21a8c81..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/MovimientoInventario.java
++++ /dev/null
+@@ -1,34 +0,0 @@
+-package com.smartpoweron.gestion_materiales.entity;
+-
+-import jakarta.persistence.*;
+-import lombok.Data;
+-import java.time.LocalDateTime;
+-
+-@Entity
+-@Table(name = "movimientos_inventario")
+-@Data
+-public class MovimientoInventario {
+-    @Id
+-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+-    private Long id;
+-
+-    @ManyToOne
+-    @JoinColumn(name = "material_id", nullable = false)
+-    private Material material;
+-
+-    @Column(nullable = false)
+-    private String tipoMovimiento; // "INGRESO" o "REPOSICION"
+-
+-    @Column(nullable = false)
+-    private Integer cantidad;
+-
+-    private LocalDateTime fecha = LocalDateTime.now();
+-
+-    @ManyToOne
+-    @JoinColumn(name = "orden_compra_id")
+-    private OrdenCompra ordenCompra;
+-
+-    @ManyToOne
+-    @JoinColumn(name = "proyecto_id")
+-    private Proyecto proyecto;
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/OrdenCompra.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/OrdenCompra.java
+index f624d60..2732c46 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/OrdenCompra.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/OrdenCompra.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.time.LocalDate;
+ 
+ @Entity
+-@Table(name = "ordenes_compra")
++@Table(name = "orden_compra")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -20,5 +20,6 @@ public class OrdenCompra {
+     private String proveedor;
+     private Long idEmpresa;
+     private LocalDate fechaEmision;
+-    private String estado; // ABIERTA, CERRADA
++    @Builder.Default
++    private String estado = "ABIERTA"; // ABIERTA, CERRADA
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/ParametroPrueba.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/ParametroPrueba.java
+index b4e763d..7955a39 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/ParametroPrueba.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/ParametroPrueba.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.math.BigDecimal;
+ 
+ @Entity
+-@Table(name = "parametros_prueba")
++@Table(name = "parametro_prueba")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -15,11 +15,11 @@ public class ParametroPrueba {
+     @GeneratedValue(strategy = GenerationType.IDENTITY)
+     private Long idParametro;
+ 
+-    private String nombre;
+     private String tipoPrueba;
+     private String unidad;
+     private BigDecimal valorMinimo;
+     private BigDecimal valorMaximo;
+     private String normaReferencia;
+-    private Boolean activo;
++    @Builder.Default
++    private Boolean activo = true;
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Proyecto.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Proyecto.java
+index c6308ba..da86770 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Proyecto.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Proyecto.java
+@@ -6,7 +6,7 @@ import java.math.BigDecimal;
+ import java.time.LocalDate;
+ 
+ @Entity
+-@Table(name = "proyectos")
++@Table(name = "proyecto")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -21,5 +21,6 @@ public class Proyecto {
+     private Long idEmpresa;
+     private LocalDate fechaInicio;
+     private BigDecimal presupuesto;   // ← BigDecimal
+-    private String estado;
++    @Builder.Default
++    private String estado = "EN_PROCESO";
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/PruebaCalidad.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/PruebaCalidad.java
+index 0104be7..dcb8825 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/PruebaCalidad.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/PruebaCalidad.java
+@@ -6,7 +6,7 @@ import java.math.BigDecimal;
+ import java.time.LocalDateTime;
+ 
+ @Entity
+-@Table(name = "pruebas_calidad")
++@Table(name = "prueba_calidad")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -22,8 +22,8 @@ public class PruebaCalidad {
+     private BigDecimal valorMedido;
+     private String observacion;
+     private String tecnicoExterno;
+-    private String estado;
+-    private Boolean anulada;
++    @Builder.Default
++    private Boolean anulada = false;
+     private String motivoAnulacion;  // <-- Añadido (error CalidadService:100,113)
+     private String resultado;        // <-- Añadido (error CalidadService:216,239)
+     private LocalDateTime fechaPrueba; // <-- Añadido (error CalidadService:243)
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Rol.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Rol.java
+index 4276846..481cd4c 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Rol.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Rol.java
+@@ -4,7 +4,7 @@ import jakarta.persistence.*;
+ import lombok.*;
+ 
+ @Entity
+-@Table(name = "roles")
++@Table(name = "rol")
+ @Data
+ @Builder
+ @NoArgsConstructor
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Usuario.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Usuario.java
+index db08c4a..79ab235 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Usuario.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Usuario.java
+@@ -5,7 +5,7 @@ import lombok.*;
+ import java.time.LocalDateTime;
+ 
+ @Entity
+-@Table(name = "usuarios")
++@Table(name = "usuario")
+ @Data
+ @Builder
+ @NoArgsConstructor
+@@ -15,12 +15,11 @@ public class Usuario {
+     @GeneratedValue(strategy = GenerationType.IDENTITY)
+     private Long idUsuario;
+ 
+-    @Column(unique = true)
+-    private String username;
+     private String passwordHash;
+     private String nombreCompleto;
+     private String correo;
+     private Long idRol;
+-    private Boolean activo;
++    @Builder.Default
++    private Boolean activo = true;
+     private LocalDateTime ultimoAcceso;
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/repository/MovimientoInventarioRepository.java b/src/main/java/com/smartpoweron/gestion_materiales/repository/MovimientoInventarioRepository.java
+deleted file mode 100644
+index 9288138..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/repository/MovimientoInventarioRepository.java
++++ /dev/null
+@@ -1,6 +0,0 @@
+-package com.smartpoweron.gestion_materiales.repository;
+-
+-import com.smartpoweron.gestion_materiales.entity.MovimientoInventario;
+-import org.springframework.data.jpa.repository.JpaRepository;
+-
+-public interface MovimientoInventarioRepository extends JpaRepository<MovimientoInventario, Long> {}
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/service/InventarioService.java b/src/main/java/com/smartpoweron/gestion_materiales/service/InventarioService.java
+deleted file mode 100644
+index 874b6a7..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/service/InventarioService.java
++++ /dev/null
+@@ -1,69 +0,0 @@
+-package com.smartpoweron.gestion_materiales.service;
+-import com.smartpoweron.gestion_materiales.repository.ProyectoRepository;
+-import com.smartpoweron.gestion_materiales.dto.IngresoMaterialDTO;
+-import com.smartpoweron.gestion_materiales.dto.ReposicionMaterialDTO;
+-import com.smartpoweron.gestion_materiales.entity.*;
+-import com.smartpoweron.gestion_materiales.exception.ReglaNegocioException;
+-import com.smartpoweron.gestion_materiales.repository.*;
+-import org.springframework.beans.factory.annotation.Autowired;
+-import org.springframework.stereotype.Service;
+-import org.springframework.transaction.annotation.Transactional;
+-
+-@Service
+-public class InventarioService {
+-
+-    @Autowired private OrdenCompraRepository ordenCompraRepository;
+-    @Autowired private MaterialRepository materialRepository;
+-    @Autowired private MovimientoInventarioRepository movimientoRepository;
+-    @Autowired private ProyectoRepository proyectoRepository;
+-
+-    @Transactional
+-    public void registrarIngreso(IngresoMaterialDTO dto) {
+-        // 1. Validar Orden de Compra
+-        OrdenCompra orden = ordenCompraRepository.findById(dto.getOrdenCompraId())
+-                .orElseThrow(() -> new ReglaNegocioException("La Orden de Compra no existe."));
+-
+-        if (!"ABIERTA".equals(orden.getEstado())) {
+-            throw new ReglaNegocioException("Solo se puede ingresar material contra una OC ABIERTA.");
+-        }
+-
+-        // 2. Validar Material
+-        Material material = materialRepository.findByCodigo(dto.getCodigoMaterial())
+-                .orElseThrow(() -> new ReglaNegocioException("El material no existe en el catálogo."));
+-
+-        // 3. Actualizar Stock
+-        material.setStockActual(material.getStockActual() + dto.getCantidad());
+-        materialRepository.save(material);
+-
+-        // 4. Registrar Movimiento
+-        MovimientoInventario movimiento = new MovimientoInventario();
+-        movimiento.setMaterial(material);
+-        movimiento.setTipoMovimiento("INGRESO");
+-        movimiento.setCantidad(dto.getCantidad());
+-        movimiento.setOrdenCompra(orden);
+-        movimientoRepository.save(movimiento);
+-    }
+-
+-    @Transactional
+-    public void registrarReposicion(ReposicionMaterialDTO dto) {
+-        // 1. Validar Proyecto
+-        Proyecto proyecto = proyectoRepository.findById(dto.getProyectoId())
+-                .orElseThrow(() -> new ReglaNegocioException("El proyecto no existe."));
+-
+-        // 2. Validar Material
+-        Material material = materialRepository.findByCodigo(dto.getCodigoMaterial())
+-                .orElseThrow(() -> new ReglaNegocioException("El material no existe."));
+-
+-        // 3. Actualizar Stock
+-        material.setStockActual(material.getStockActual() + dto.getCantidadSobrante());
+-        materialRepository.save(material);
+-
+-        // 4. Registrar Movimiento
+-        MovimientoInventario movimiento = new MovimientoInventario();
+-        movimiento.setMaterial(material);
+-        movimiento.setTipoMovimiento("REPOSICION");
+-        movimiento.setCantidad(dto.getCantidadSobrante());
+-        movimiento.setProyecto(proyecto);
+-        movimientoRepository.save(movimiento);
+-    }
+-}
+\ No newline at end of file

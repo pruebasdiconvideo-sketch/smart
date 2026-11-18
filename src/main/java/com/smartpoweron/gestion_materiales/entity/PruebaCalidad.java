@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "pruebas_calidad")
+@Table(name = "prueba_calidad")
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,8 +22,8 @@ public class PruebaCalidad {
     private BigDecimal valorMedido;
     private String observacion;
     private String tecnicoExterno;
-    private String estado;
-    private Boolean anulada;
+    @Builder.Default
+    private Boolean anulada = false;
     private String motivoAnulacion;  // <-- Añadido (error CalidadService:100,113)
     private String resultado;        // <-- Añadido (error CalidadService:216,239)
     private LocalDateTime fechaPrueba; // <-- Añadido (error CalidadService:243)
