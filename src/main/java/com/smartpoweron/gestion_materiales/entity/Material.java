@@ -1,12 +1,15 @@
 package com.smartpoweron.gestion_materiales.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "materiales")
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Material {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -14,7 +17,6 @@ public class Material {
 
     @Column(unique = true, nullable = false)
     private String codigo;
-
     private String nombre;
     private String descripcion;
     private String categoria;
@@ -24,9 +26,9 @@ public class Material {
     private String unidadMedida;
     private String especificacionTecnica;
     private BigDecimal precioUnitario;
-    private Integer stockActual = 0;
-    private Integer stockMinimo = 0;
-    private String estado = "ACTIVO";
+    private Integer stockActual;
+    private Integer stockMinimo;
+    private String estado; // ACTIVO, INACTIVO
     private String pasillo;
     private String estante;
     private String nivel;

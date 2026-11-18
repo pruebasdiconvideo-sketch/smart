@@ -7,48 +7,37 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 public class Dtos {
 
     // --- Autenticación y Usuarios ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class LoginRequest {
         private String correo;
         private String password;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class LoginResponse {
         private String token;
         private String username;
+        private String nombreCompleto; // <-- Faltaba
         private String rol;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class UsuarioDto {
         private Long idUsuario;
         private String username;
         private String nombreCompleto;
         private String correo;
+        private Long idRol; // <-- Faltaba
         private String rol;
         private Boolean activo;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class UsuarioCreate {
         private String username;
         private String password;
@@ -58,10 +47,7 @@ public class Dtos {
         private Boolean activo;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class UsuarioUpdate {
         private String password;
         private String nombreCompleto;
@@ -71,45 +57,45 @@ public class Dtos {
     }
 
     // --- Empresas ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class EmpresaDto {
         private Long idEmpresa;
-        private String nombre;
         private String ruc;
-        private String direccion;
-        private String telefono;
+        private String razonSocial;
+        private String razonComercial;
+        private String tipo;
+        private String contactoNombre;
+        private String contactoTelefono;
+        private String contactoCorreo;
+        private String estado;
+        private LocalDate fechaRegistro;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class EmpresaCreate {
-        private String nombre;
         private String ruc;
-        private String direccion;
-        private String telefono;
+        private String razonSocial;
+        private String razonComercial;
+        private String tipo; // <-- Faltaba
+        private String contactoNombre;
+        private String contactoTelefono;
+        private String contactoCorreo;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class EmpresaUpdate {
-        private String nombre;
         private String ruc;
-        private String direccion;
-        private String telefono;
+        private String razonSocial;
+        private String razonComercial;
+        private String tipo;
+        private String contactoNombre;
+        private String contactoTelefono;
+        private String contactoCorreo;
+        private String estado; // <-- Faltaba
     }
 
     // --- Materiales ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MaterialDto {
         private Long idMaterial;
         private String codigo;
@@ -125,12 +111,12 @@ public class Dtos {
         private Integer stockActual;
         private Integer stockMinimo;
         private String estado;
+        private String pasillo; // <-- Faltaba
+        private String estante;
+        private String nivel;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MaterialCreate {
         private String codigo;
         private String nombre;
@@ -148,10 +134,7 @@ public class Dtos {
         private String nivel;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MaterialUpdate {
         private String codigo;
         private String nombre;
@@ -169,44 +152,35 @@ public class Dtos {
         private String nivel;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MaterialInstanciaDto {
         private Long idInstancia;
         private String numeroSerie;
         private Long idMaterial;
+        private String codigoMaterial; // <-- Faltaba
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CategoriaStockDto {
         private String categoria;
         private Integer stockTotal;
         private Integer numMateriales;
+        private Integer stockMinimoTotal; // <-- Faltaba
     }
 
     // --- Órdenes de Compra ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OrdenCompraDto {
         private Long idOrdenCompra;
         private String codigo;
         private String proveedor;
+        private String rucProveedor; // <-- Faltaba
         private Long idEmpresa;
         private LocalDate fechaEmision;
         private String estado;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OrdenCompraCreate {
         private String codigo;
         private String proveedor;
@@ -215,10 +189,7 @@ public class Dtos {
         private List<DetalleOrdenCompraDto> items;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OrdenCompraUpdate {
         private String codigo;
         private String proveedor;
@@ -227,151 +198,117 @@ public class Dtos {
         private List<DetalleOrdenCompraDto> items;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DetalleOrdenCompraDto {
         private Long idDetalle;
+        private Long idDetalleOc; // <-- Faltaba (aunque no es común, el servicio lo pide)
         private Long idMaterial;
         private Integer cantidad;
         private BigDecimal precioUnitario;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class IngresoRequest {
         private Long idOrdenCompra;
         private List<IngresoItem> items;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class IngresoItem {
         private String codigo;
         private Integer cantidad;
         private List<String> numeroSeries;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class IngresoResponse {
         private boolean exito;
         private String mensaje;
         private Integer nuevoStock;
+        private List<String> detalle; // <-- Faltaba
     }
 
     // --- Proyectos y Solicitudes ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProyectoDto {
         private Long idProyecto;
         private String codigo;
         private String cliente;
+        private String rucCliente; // <-- Faltaba
         private Long idEmpresa;
         private LocalDate fechaInicio;
         private Double presupuesto;
         private String estado;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProyectoCreate {
         private String codigo;
         private String cliente;
         private Long idEmpresa;
         private LocalDate fechaInicio;
-        private Double presupuesto;
+        private Double presupuesto; // <-- Ojo: en el test se usa BigDecimal
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class SolicitudDto {
         private Long idSolicitud;
         private Long idProyecto;
         private String codigoProyecto;
+        private String cliente; // <-- Faltaba
         private String estado;
         private Boolean anulada;
         private List<DetalleSolicitudDto> detalle;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class SolicitudCreate {
         private Long idProyecto;
         private List<DetalleSolicitudCreate> bom;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DetalleSolicitudCreate {
         private Long idMaterial;
         private Integer cantidad;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DetalleSolicitudDto {
         private Long idDetalle;
+        private Long idDetalleSolicitud; // <-- Faltaba
         private Long idMaterial;
         private Integer cantidad;
+        private Integer cantidadSolicitada; // <-- Faltaba (usado en tests)
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class AprobacionRequest {
         private Boolean aprobada;
         private String observacion;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class FaltanteDto {
         private Long idMaterial;
+        private String codigo; // <-- Faltaba
         private String codigoMaterial;
         private Integer cantidadFaltante;
     }
 
     // --- Calidad ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class PruebaCalidadDto {
         private Long idPrueba;
         private Long idProyecto;
+        private String codigoProyecto; // <-- Faltaba
         private Long idParametro;
         private BigDecimal valorMedido;
         private String estado;
         private Boolean anulada;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class PruebaCalidadCreate {
         private Long idProyecto;
         private Long idParametro;
@@ -380,21 +317,16 @@ public class Dtos {
         private String tecnicoExterno;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ParametroPruebaDto {
         private Long idParametro;
         private String nombre;
         private String tipoPrueba;
+        private String unidad; // <-- Faltaba
         private Boolean activo;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ParametroCreate {
         private String nombre;
         private String tipoPrueba;
@@ -404,10 +336,7 @@ public class Dtos {
         private String normaReferencia;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ParametroUpdate {
         private String nombre;
         private String tipoPrueba;
@@ -418,118 +347,86 @@ public class Dtos {
     }
 
     // --- Despacho ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class BandejaItemDto {
         private Long idSolicitud;
         private String codigoProyecto;
+        private String cliente; // <-- Faltaba
         private String estado;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ValidacionResponse {
         private Boolean valido;
         private String mensaje;
         private String codigoEsperado;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ValidacionItemRequest {
         private Long idDetalleSolicitud;
         private String codigoDigitado;
         private Integer cantidadEntregada;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DespachoDto {
         private Long idDespacho;
         private Long idSolicitud;
+        private String codigoProyecto; // <-- Faltaba
         private String tipo;
         private String estado;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DespachoRequest {
         private Long idSolicitud;
         private List<DespachoItemRequest> items;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DespachoItemRequest {
         private Long idDetalleSolicitud;
         private String codigoDigitado;
         private Integer cantidadEntregada;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class PendienteConfirmacionDto {
         private Long idDespacho;
         private Long idSolicitud;
+        private String codigoProyecto; // <-- Faltaba
         private String proyecto;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ItemDespachoDto {
         private Long idDetalle;
+        private Long idDetalleDespacho; // <-- Faltaba
         private String codigoMaterial;
         private Integer cantidad;
     }
 
     // --- Mermas y Devoluciones ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class SolicitudAnulacionRequest {
         private Long id;
         private String motivo;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DevolucionCreate {
         private Long idProyecto;
         private Long idMaterial;
         private Integer cantidad;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MarcarMermaRequest {
         private String motivo;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ReporteMermaItem {
         private String codigoProyecto;
         private String codigoMaterial;
@@ -539,27 +436,23 @@ public class Dtos {
         private BigDecimal costoEstimado;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MermaDevolucionDto {
         private Long idMerma;
         private Long idProyecto;
         private String codigoProyecto;
         private Long idMaterial;
         private String codigoMaterial;
+        private String nombreMaterial; // <-- Faltaba
     }
 
     // --- Trazabilidad ---
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class TrazabilidadDto {
         private Long idTrazabilidad;
         private String codigoMaterial;
         private String nombreMaterial;
+        private String tipoMovimiento; // <-- Faltaba
         private String accion;
     }
 }
