@@ -1,0 +1,47 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Trazabilidad de materiales')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Trazabilidad de materiales</h3>
+        <p class="text-muted small mb-3">P5-T09 · RF36</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const datos = await getJson('/api/almacen/materiales');
+    el('contenido').innerHTML = `
+    <form class="row g-2 mb-3">
+      <div class="col-md-6"><input id="codigo" class="form-control" placeholder="Código del material (ej. SIPROTEC-7SJ62)"/></div>
+      <div class="col-md-3"><button class="btn btn-primary" id="buscar">Consultar trazabilidad</button></div>
+    </form>
+    <div id="result"></div>`;
+  el('buscar').onclick = async () => {
+    const cod = el('codigo').value.trim();
+    if (!cod) return;
+    try {
+      const list = await getJson('/api/trazabilidad/materiales/'+encodeURIComponent(cod));
+      el('result').innerHTML = list.length ? `
+        <table class="table table-sm"><thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Usuario</th><th>Proyecto</th><th>OC</th></tr></thead>
+        <tbody>${list.map(t=>`<tr><td>${fmtFecha(t.fechaMovimiento)}</td><td>${esc(t.tipoMovimiento)}</td><td>${t.cantidad}</td><td>${esc(t.usuario)}</td><td>${esc(t.codigoProyecto||'')}</td><td>${esc(t.codigoOrdenCompra||'')}</td></tr>`).join('')}</tbody></table>`
+        : '<p class="text-muted">Sin movimientos registrados para ese material.</p>';
+    } catch(e){ el('result').innerHTML = '<div class="alert alert-danger">'+e.message+'</div>'; }
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

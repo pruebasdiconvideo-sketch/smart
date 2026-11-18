@@ -1,0 +1,95 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Gestión de usuarios')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Gestión de usuarios</h3>
+        <p class="text-muted small mb-3">A0-T01, A0-T02 · RF03 (sólo ADMIN)</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const datos = await getJson('/api/admin/usuarios');
+    let idEditando = null;
+    const roles = [
+      {value:1,label:'ADMIN'},
+      {value:2,label:'JEFE_PRODUCCION'},
+      {value:3,label:'ALMACENERO'},
+      {value:4,label:'OPERARIO_ENSAMBLE'},
+      {value:5,label:'INSPECTOR'}
+    ];
+    el('contenido').innerHTML = `
+    <button class="btn btn-primary mb-3" id="btnNuevo">Nuevo usuario</button>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID</th><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>${datos.map(u=>`<tr>
+      <td>${u.idUsuario}</td><td>${esc(u.nombreCompleto)}</td><td>${esc(u.correo)}</td>
+      <td><span class="badge bg-secondary">${esc(u.rol)}</span></td>
+      <td>${u.activo?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-secondary">Inactivo</span>'}</td>
+      <td>${u.activo?`<button class="btn btn-sm btn-outline-primary me-1" onclick="editarUsuario(${u.idUsuario})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="desactivar(${u.idUsuario})">Desactivar</button>`:`<button class="btn btn-sm btn-outline-success" onclick="reactivar(${u.idUsuario})">Reactivar</button>`}</td>
+    </tr>`).join('')}</tbody></table></div>
+    <div id="form" class="card p-3" style="display:none">
+      <h6 id="tituloFormulario">Nuevo usuario</h6>
+      <div class="row g-2">
+        <div class="col"><label class="form-label" for="rolDisplay">Rol</label>${modalSelectorMarkup('rol', 'Seleccione un rol')}</div>
+        <div class="col"><input class="form-control" id="nombre" placeholder="Nombre completo" required/></div>
+        <div class="col"><input class="form-control" id="correo" type="email" placeholder="Correo" required/></div>
+        <div class="col"><input class="form-control" id="password" type="password" placeholder="Contraseña"/></div>
+      </div>
+      <div class="mt-2"><button class="btn btn-primary" id="guardar">Guardar</button>
+        <button class="btn btn-secondary" id="cancelar" type="button">Cancelar</button></div>
+    </div>`;
+  initModalSelector('rol', 'rol', roles);
+  const abrirFormulario = usuario => {
+    idEditando = usuario ? usuario.idUsuario : null;
+    el('tituloFormulario').textContent = usuario ? 'Editar usuario' : 'Nuevo usuario';
+    el('guardar').textContent = usuario ? 'Guardar cambios' : 'Crear usuario';
+    el('nombre').value = usuario ? usuario.nombreCompleto : '';
+    el('correo').value = usuario ? usuario.correo : '';
+    el('password').value = '';
+    el('password').required = !usuario;
+    if (usuario) {
+      const rol = roles.find(r => r.value === usuario.idRol);
+      el('rol').value = String(usuario.idRol);
+      el('rolDisplay').value = rol ? rol.label : '';
+    } else {
+      el('rol').value = '';
+      el('rolDisplay').value = '';
+    }
+    el('form').style.display = 'block';
+    el('form').scrollIntoView({behavior: 'smooth', block: 'start'});
+  };
+  document.getElementById('btnNuevo').onclick = () => abrirFormulario(null);
+  document.getElementById('cancelar').onclick = () => { el('form').style.display='none'; };
+  document.getElementById('guardar').onclick = async () => {
+    try {
+      const body = {idRol: parseInt(el('rol').value), nombreCompleto: el('nombre').value.trim(), correo: el('correo').value.trim(), password: el('password').value};
+      if (idEditando === null) await postJson('/api/admin/usuarios', body);
+      else await putJson('/api/admin/usuarios/' + idEditando, body);
+      window.location.reload();
+    }
+    catch(e){ alert(e.message); }
+  };
+  window.editarUsuario = id => {
+    const usuario = datos.find(u => u.idUsuario === id);
+    if (usuario) abrirFormulario(usuario);
+  };
+  window.desactivar = async id => { if(!confirm('¿Desactivar usuario?')) return; try { await patch('/api/admin/usuarios/'+id+'/desactivar'); window.location.reload(); } catch(e){ alert(e.message); } };
+  window.reactivar = async id => { try { await patch('/api/admin/usuarios/'+id+'/reactivar'); window.location.reload(); } catch(e){ alert(e.message); } };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

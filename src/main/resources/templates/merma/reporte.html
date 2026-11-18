@@ -1,0 +1,33 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Reporte de mermas')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Reporte de mermas</h3>
+        <p class="text-muted small mb-3">P5-T09 · RF35</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const datos = await getJson('/api/merma/reporte');
+    el('contenido').innerHTML = datos.length ? `
+    <table class="table table-sm"><thead><tr><th>Proyecto</th><th>Material</th><th>Motivo</th><th>Cantidad</th><th>Costo estimado</th></tr></thead>
+    <tbody>${datos.map(r=>`<tr><td>${esc(r.codigoProyecto)}</td><td>${esc(r.codigoMaterial)} - ${esc(r.nombreMaterial)}</td><td>${esc(r.motivo||'')}</td><td>${r.cantidad}</td><td>${fmtMonto(r.costoEstimado)}</td></tr>`).join('')}</tbody></table>` : '<p class="text-muted">No hay mermas validadas en el periodo.</p>';
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

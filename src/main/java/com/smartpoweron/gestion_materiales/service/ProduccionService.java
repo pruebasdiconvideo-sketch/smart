@@ -1,8 +1,8 @@
 package com.smartpoweron.gestion_materiales.service;
 
 import com.smartpoweron.gestion_materiales.model.DetalleSolicitud;
-import com.smartpoweron.gestion_materiales.model.Material;
 import com.smartpoweron.gestion_materiales.model.SolicitudProduccion;
+import com.smartpoweron.gestion_materiales.entity.Material;
 import com.smartpoweron.gestion_materiales.repository.MaterialRepository;
 import com.smartpoweron.gestion_materiales.repository.SolicitudProduccionRepository;
 import org.springframework.beans.factory.annotation.Autowired;

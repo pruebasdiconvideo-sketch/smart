@@ -1,0 +1,150 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Solicitud de materiales con BOM')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Solicitud de materiales con BOM</h3>
+        <p class="text-muted small mb-3">P2-T03 a P2-T09 · RF13-RF18</p>
+        <div class="card"><div class="card-body"><div id="contenido"></div></div></div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const [datos, proyectosRespuesta, materiales] = await Promise.all([
+      getJson('/api/produccion/solicitudes'),
+      getJson('/api/produccion/proyectos'),
+      getJson('/api/almacen/materiales')
+    ]);
+    const proyectos = proyectosRespuesta.filter(p => p.estado !== 'ANULADO');
+    let solicitudEditando = null;
+    let siguienteLinea = 0;
+    el('contenido').innerHTML = `
+      <button class="btn btn-primary mb-3" id="nuevaSolicitud">Nueva solicitud</button>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID</th><th>Proyecto</th><th>Cliente</th><th>Costo</th><th>Presupuesto</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>${datos.map(s=>`<tr>
+        <td>${s.idSolicitud}</td><td>${esc(s.codigoProyecto)}</td><td>${esc(s.cliente)}</td>
+        <td>${fmtMonto(s.costoTotal)}</td><td>${fmtMonto(s.presupuesto)}</td>
+        <td><span class="badge ${s.anulada?'bg-dark':s.estado==='LISTA_DESPACHO'?'bg-success':s.estado==='RETENIDA'?'bg-warning text-dark':s.estado==='DESPACHADA'?'bg-secondary':'bg-info'}">${s.anulada?'ANULADA':esc(s.estado)}</span>
+          ${s.anulada && s.motivoAnulacion ? `<div class="small text-muted">${esc(s.motivoAnulacion)}</div>` : ''}</td>
+        <td><button class="btn btn-sm btn-link" onclick="verDetalle(${s.idSolicitud})">Detalle</button>
+          ${s.editable?`<button class="btn btn-sm btn-outline-primary me-1" onclick="editarSolicitud(${s.idSolicitud})">Editar</button>`:''}
+          ${!s.anulada?`<button class="btn btn-sm btn-outline-danger me-1" onclick="anularSolicitud(${s.idSolicitud})">Anular</button>`:''}
+          ${!s.anulada && !['DESPACHADA','RECHAZADA'].includes(s.estado)?`<button class="btn btn-sm btn-link" onclick="verificar(${s.idSolicitud})" title="RF17/RF18">Verificar stock</button>`:''}
+        </td>
+      </tr>`).join('')}</tbody></table></div>
+      <div id="formSolicitud" class="card p-3 mb-3" style="display:none">
+        <h6 id="tituloFormulario">Nueva solicitud</h6>
+        <div class="mb-3"><label class="form-label" for="proyectoDisplay">Proyecto</label>${modalSelectorMarkup('proyecto', 'Seleccione un proyecto')}</div>
+        <h6>Materiales solicitados</h6>
+        <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Material</th><th style="width:160px">Cantidad</th><th></th></tr></thead><tbody id="lineasBom"></tbody></table></div>
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="agregarLinea">Agregar material</button>
+        <div class="mt-3"><button class="btn btn-primary" type="button" id="guardarSolicitud">Guardar</button>
+          <button class="btn btn-secondary" type="button" id="cancelarSolicitud">Cancelar</button></div>
+      </div>
+      <div id="detalle"></div>`;
+
+    initModalSelector('proyecto', 'proyecto', proyectos.map(p=>({value:p.idProyecto,label:`${p.codigo} - ${p.cliente}`})));
+    el('proyecto').value = '';
+    el('proyectoDisplay').value = '';
+    const agregarLinea = (idMaterial, cantidad) => {
+      const index = siguienteLinea++;
+      const selectorId = 'materialLinea' + index;
+      const tr = document.createElement('tr');
+      tr.className = 'bom-line';
+      tr.innerHTML = `<td>${modalSelectorMarkup(selectorId, 'Seleccione un material')}</td>
+        <td><input class="form-control cantidad-linea" type="number" min="1" step="1" value="${cantidad || 1}" required/></td>
+        <td><button class="btn btn-sm btn-outline-danger quitar-linea" type="button">Quitar</button></td>`;
+      el('lineasBom').append(tr);
+      initModalSelector(selectorId, 'material', materiales.map(m=>({value:m.idMaterial,label:`${m.codigo} - ${m.nombre}`})));
+      if (idMaterial != null) {
+        const material = materiales.find(m=>m.idMaterial===idMaterial);
+        if (material) {
+          el(selectorId).value = String(material.idMaterial);
+          el(selectorId + 'Display').value = `${material.codigo} - ${material.nombre}`;
+        }
+      } else {
+        el(selectorId).value = '';
+        el(selectorId + 'Display').value = '';
+      }
+      tr.querySelector('.quitar-linea').onclick = () => {
+        tr.remove();
+        const modal = document.getElementById('modal-selector-' + selectorId);
+        if (modal) modal.remove();
+      };
+    };
+    const abrirFormulario = solicitud => {
+      solicitudEditando = solicitud ? solicitud.idSolicitud : null;
+      el('tituloFormulario').textContent = solicitud ? `Editar solicitud #${solicitud.idSolicitud}` : 'Nueva solicitud';
+      el('lineasBom').replaceChildren();
+      if (solicitud) {
+        const proyecto = proyectos.find(p=>p.idProyecto===solicitud.idProyecto);
+        if (proyecto) {
+          el('proyecto').value = String(proyecto.idProyecto);
+          el('proyectoDisplay').value = `${proyecto.codigo} - ${proyecto.cliente}`;
+        }
+        solicitud.detalle.forEach(d => agregarLinea(d.idMaterial, d.cantidadSolicitada));
+      } else {
+        el('proyecto').value = '';
+        el('proyectoDisplay').value = '';
+        agregarLinea(null, 1);
+      }
+      el('formSolicitud').style.display = 'block';
+      el('formSolicitud').scrollIntoView({behavior: 'smooth', block: 'start'});
+    };
+    el('nuevaSolicitud').onclick = () => abrirFormulario(null);
+    el('agregarLinea').onclick = () => agregarLinea(null, 1);
+    el('cancelarSolicitud').onclick = () => { el('formSolicitud').style.display='none'; };
+    el('guardarSolicitud').onclick = async () => {
+      const bom = [...document.querySelectorAll('#lineasBom tr')].map(tr=>({
+        idMaterial: parseInt(tr.querySelector('input[type="hidden"]').value),
+        cantidad: parseInt(tr.querySelector('.cantidad-linea').value)
+      }));
+      if (!el('proyecto').value || bom.some(linea=>!linea.idMaterial || !linea.cantidad || linea.cantidad < 1)) {
+        alert('Seleccione un proyecto y complete cada material con una cantidad mayor que cero.');
+        return;
+      }
+      const body = {idProyecto: parseInt(el('proyecto').value), bom};
+      try {
+        if (solicitudEditando === null) await postJson('/api/produccion/solicitudes', body);
+        else await putJson('/api/produccion/solicitudes/' + solicitudEditando, body);
+        window.location.reload();
+      } catch(e) { alert(e.message); }
+    };
+    window.editarSolicitud = id => {
+      const solicitud = datos.find(s=>s.idSolicitud===id);
+      if (!solicitud) return;
+      if (solicitud.detalle.some(d=>!materiales.some(m=>m.idMaterial===d.idMaterial))) {
+        alert('No se puede editar: la solicitud contiene materiales inactivos. Puede anularla para conservar el historial.');
+        return;
+      }
+      abrirFormulario(solicitud);
+    };
+    window.anularSolicitud = async id => {
+      const motivo = prompt('Indique el motivo de anulación. Si ya hubo despachos confirmados, se compensará el stock y se registrará la devolución.');
+      if (!motivo || !motivo.trim()) return;
+      try { await api('/api/produccion/solicitudes/' + id, {method:'DELETE', body:JSON.stringify({motivo:motivo.trim()})}); window.location.reload(); }
+      catch(e) { alert(e.message); }
+    };
+    window.verDetalle = async id => {
+      try {
+        const s = await getJson('/api/produccion/solicitudes/'+id+'/faltantes');
+        el('detalle').innerHTML = '<h6>Faltantes</h6>' + (s.length?('<table class="table table-sm"><thead><tr><th>Código</th><th>Nombre</th><th>Solicitado</th><th>Stock</th><th>Faltante</th></tr></thead><tbody>'+s.map(f=>`<tr><td>${esc(f.codigo)}</td><td>${esc(f.nombre)}</td><td>${f.cantidadSolicitada}</td><td>${f.stockActual}</td><td class="text-danger">${f.faltante}</td></tr>`).join('')+'</tbody></table>'):'<p class="text-success">Sin faltantes. La solicitud puede pasar a LISTA_DESPACHO.</p>');
+      } catch(e){ el('detalle').innerHTML = '<div class="alert alert-info">' + esc(e.message) + '</div>'; }
+    };
+    window.verificar = async id => {
+      try { const s = await postJson('/api/produccion/solicitudes/'+id+'/verificar-stock', {}); alert('Estado actualizado: ' + s.estado); window.location.reload(); }
+      catch(e){ alert(e.message); }
+    };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + esc(e.message) + '</div>'; }
+})();
+</script>
+</body></html>

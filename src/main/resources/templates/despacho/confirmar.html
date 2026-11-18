@@ -1,0 +1,49 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Confirmar recepción de kits')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Confirmar recepción de kits</h3>
+        <p class="text-muted small mb-3">P3-T06, P3-T07 · RF23, RF24</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const datos = await getJson('/api/despacho/pendientes-confirmacion');
+    el('contenido').innerHTML = datos.length ? `
+    <table class="table table-sm"><thead><tr><th>ID Despacho</th><th>Proyecto</th><th>Fecha</th><th>Tipo</th><th>Total</th><th>Acción</th></tr></thead>
+    <tbody>${datos.map(d=>`<tr>
+      <td>${d.idDespacho}</td><td>${esc(d.codigoProyecto)}</td><td>${fmtFecha(d.fechaDespacho)}</td>
+      <td>${d.tipo}</td><td>${d.totalEntregado}</td>
+      <td><button class="btn btn-sm btn-success me-1" onclick="conf(${d.idDespacho})">Confirmar recepción</button>
+        <button class="btn btn-sm btn-outline-danger" onclick="anular(${d.idDespacho})">Anular pendiente</button></td>
+    </tr>`).join('')}</tbody></table>
+    <p class="small text-muted">Al confirmar, el sistema descuenta el stock y registra el movimiento SALIDA (P3-RN03).</p>` : '<p class="text-muted">No hay despachos pendientes de confirmación.</p>';
+  window.conf = async id => {
+    try { const r = await postJson('/api/despacho/'+id+'/confirmar', {}); alert('Recepción confirmada. Stock descontado. Estado: ' + r.estado); window.location.reload(); }
+    catch(e){ alert(e.message); }
+  };
+  window.anular = async id => {
+    const motivo = prompt('Indique el motivo para anular este despacho pendiente:');
+    if (!motivo || !motivo.trim()) return;
+    try { await api('/api/despacho/' + id, {method:'DELETE', body:JSON.stringify({motivo:motivo.trim()})}); window.location.reload(); }
+    catch(e){ alert(e.message); }
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

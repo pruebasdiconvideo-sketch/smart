@@ -1,0 +1,112 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Pruebas funcionales y certificado')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Pruebas funcionales y certificado</h3>
+        <p class="text-muted small mb-3">P4-T02 a P4-T09 · RF25-RF29</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const [proyectosRespuesta, parametrosRespuesta] = await Promise.all([
+      getJson('/api/produccion/proyectos'),
+      getJson('/api/admin/parametros-prueba')
+    ]);
+    const proyectos = proyectosRespuesta.filter(p=>p.estado!=='ANULADO');
+    const parametros = parametrosRespuesta.filter(p=>p.activo);
+    let pruebaEditando = null;
+    el('contenido').innerHTML = `
+    <div class="row mb-3">
+      <div class="col-md-3"><label class="form-label" for="proyectoDisplay">Proyecto</label>${modalSelectorMarkup('proyecto', 'Seleccione un proyecto')}</div>
+      <div class="col-md-3"><label class="form-label" for="parametroDisplay">Parámetro</label>${modalSelectorMarkup('parametro', 'Seleccione un parámetro')}</div>
+      <div class="col-md-3"><input id="valor" class="form-control" type="number" step="0.001" placeholder="Valor medido"/></div>
+      <div class="col-md-3"><button class="btn btn-primary w-100" id="registrar">Registrar prueba</button>
+        <button class="btn btn-secondary w-100 mt-1" id="cancelarEdicion" type="button" style="display:none">Cancelar edición</button></div>
+    </div>
+    <button class="btn btn-warning mb-3" id="cert">Generar certificado PDF (RF28)</button>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Parámetro</th><th>Valor medido</th><th>Rango</th><th>Resultado</th><th>Inspector</th><th>Fecha</th><th>Estado / acciones</th></tr></thead>
+    <tbody id="hist"></tbody></table>`;
+    initModalSelector('proyecto', 'proyecto', proyectos.map(p=>({value:p.idProyecto,label:`${p.codigo} - ${p.cliente}`})));
+    initModalSelector('parametro', 'parámetro de prueba', parametros.map(p=>({value:p.idParametro,label:`${p.tipoPrueba} (${p.valorMinimo}-${p.valorMaximo} ${p.unidad||''})`})));
+    async function loadHist() {
+      if (!el('proyecto').value) { el('hist').innerHTML=''; return; }
+      const lista = await getJson('/api/calidad/pruebas?proyecto='+el('proyecto').value);
+      el('hist').innerHTML = lista.map(p=>`<tr>
+        <td>${esc(p.tipoPrueba)}</td><td>${p.valorMedido} ${esc(p.unidad||'')}</td><td>${p.valorMinimo} - ${p.valorMaximo}</td>
+        <td><span class="badge ${p.resultado==='CONFORME'?'bg-success':'bg-danger'}">${esc(p.resultado)}</span></td>
+        <td>${esc(p.inspector)}</td><td>${fmtFecha(p.fechaPrueba)}</td>
+        <td>${p.anulada?`<span class="badge bg-secondary">Anulada</span><div class="small text-muted">${esc(p.motivoAnulacion||'')}</div>`:
+          `<button class="btn btn-sm btn-outline-primary me-1" onclick="editarPrueba(${p.idPrueba})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="anularPrueba(${p.idPrueba})">Anular</button>`}</td>
+      </tr>`).join('');
+    }
+  el('proyecto').addEventListener('change', loadHist);
+  el('parametro').value='';
+  el('parametroDisplay').value='';
+  await loadHist();
+  el('cancelarEdicion').onclick = () => {
+    pruebaEditando = null;
+    el('registrar').textContent = 'Registrar prueba';
+    el('cancelarEdicion').style.display = 'none';
+    el('valor').value = '';
+  };
+  window.editarPrueba = async id => {
+    const lista = await getJson('/api/calidad/pruebas?proyecto='+el('proyecto').value);
+    const prueba = lista.find(p=>p.idPrueba===id);
+    if (!prueba) return;
+    const parametro = parametros.find(p=>p.idParametro===prueba.idParametro);
+    const proyecto = proyectos.find(p=>p.idProyecto===prueba.idProyecto);
+    if (!parametro || !proyecto) {
+      alert('No se puede editar: el proyecto o parámetro ya no está activo.');
+      return;
+    }
+    pruebaEditando = id;
+    el('proyecto').value = String(proyecto.idProyecto);
+    el('proyectoDisplay').value = `${proyecto.codigo} - ${proyecto.cliente}`;
+    el('parametro').value = String(parametro.idParametro);
+    el('parametroDisplay').value = `${parametro.tipoPrueba} (${parametro.valorMinimo}-${parametro.valorMaximo} ${parametro.unidad||''})`;
+    el('valor').value = prueba.valorMedido;
+    el('registrar').textContent = 'Guardar reemplazo';
+    el('cancelarEdicion').style.display = 'block';
+    el('valor').focus();
+  };
+  window.anularPrueba = async id => {
+    const motivo = prompt('Indique el motivo para anular esta prueba. Se conservará en el historial.');
+    if (!motivo || !motivo.trim()) return;
+    try { await api('/api/calidad/pruebas/'+id, {method:'DELETE', body:JSON.stringify({motivo:motivo.trim()})}); await loadHist(); }
+    catch(e){ alert(e.message); }
+  };
+  el('registrar').onclick = async () => {
+    const body = {idProyecto:parseInt(el('proyecto').value), idParametro:parseInt(el('parametro').value), valorMedido:parseFloat(el('valor').value)};
+    try {
+      if (!body.idProyecto || !body.idParametro || Number.isNaN(body.valorMedido)) { alert('Seleccione proyecto, parámetro e ingrese el valor medido.'); return; }
+      if (pruebaEditando === null) await postJson('/api/calidad/pruebas', body);
+      else await putJson('/api/calidad/pruebas/'+pruebaEditando, body);
+      el('cancelarEdicion').click();
+      await loadHist();
+    }
+    catch(e){ alert(e.message); }
+  };
+  el('cert').onclick = async () => {
+    const id = el('proyecto').value;
+    try { const blob = await api('/api/calidad/proyectos/'+id+'/certificado.pdf', {method:'GET'}); const url = URL.createObjectURL(blob); window.open(url); }
+    catch(e){ alert(e.message); }
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

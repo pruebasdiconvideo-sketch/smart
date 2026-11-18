@@ -1,0 +1,93 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Devoluciones y mermas')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Devoluciones y mermas</h3>
+        <p class="text-muted small mb-3">P5-T01 a P5-T08 · RF31-RF34</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const [datos, proyectosRespuesta, materiales] = await Promise.all([
+      getJson('/api/merma/devoluciones'),
+      getJson('/api/produccion/proyectos'),
+      getJson('/api/almacen/materiales')
+    ]);
+    const proyectos = proyectosRespuesta.filter(p=>p.estado!=='ANULADO');
+    let idEditando = null;
+    el('contenido').innerHTML = `
+      <button class="btn btn-primary mb-3" id="nueva">Registrar devolución</button>
+      <p class="small text-muted">El almacenero puede reintegrar o marcar una devolución como merma; el jefe valida la baja. Las anulaciones conservan el historial y compensan el inventario.</p>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID</th><th>Proyecto</th><th>Material</th><th>Tipo</th><th>Cantidad</th><th>Estado</th><th>Motivo</th><th>Fecha</th><th>Acciones</th></tr></thead>
+      <tbody>${datos.map(d=>`<tr>
+        <td>${d.idMerma}</td><td>${esc(d.codigoProyecto)}</td><td>${esc(d.codigoMaterial)} - ${esc(d.nombreMaterial)}</td>
+        <td>${esc(d.tipo)}</td><td>${d.cantidad}</td>
+        <td>${d.anulada?'<span class="badge bg-dark">ANULADA</span>':`<span class="badge ${d.estado==='PENDIENTE'?'bg-warning text-dark':d.estado==='REINTEGRADO'?'bg-success':'bg-secondary'}">${esc(d.estado)}</span>`}</td>
+        <td>${esc(d.anulada?d.motivoAnulacion:(d.motivo||''))}</td><td>${fmtFecha(d.fecha)}</td>
+        <td>${d.anulada?'':`${d.estado==='PENDIENTE'?`<button class="btn btn-sm btn-outline-primary me-1" onclick="editar(${d.idMerma})">Editar</button>`:''}
+          ${d.estado==='PENDIENTE'&&d.tipo==='DEVOLUCION'?`<button class="btn btn-sm btn-outline-success me-1" onclick="reintegrar(${d.idMerma})">Reintegrar</button><button class="btn btn-sm btn-outline-warning me-1" onclick="marcarMerma(${d.idMerma})">Marcar merma</button>`:''}
+          ${d.estado==='PENDIENTE'&&d.tipo==='MERMA'?`<button class="btn btn-sm btn-outline-success me-1" onclick="validar(${d.idMerma})">Validar baja</button>`:''}
+          <button class="btn btn-sm btn-outline-danger" onclick="anular(${d.idMerma})">Anular</button>`}</td>
+      </tr>`).join('')}</tbody></table></div>
+      <div id="form" class="card p-3" style="display:none">
+        <h6 id="tituloFormulario">Registrar devolución</h6>
+        <div class="row g-2">
+          <div class="col-md-4"><label class="form-label" for="proyectoDisplay">Proyecto</label>${modalSelectorMarkup('proyecto', 'Seleccione un proyecto')}</div>
+          <div class="col-md-5"><label class="form-label" for="materialDisplay">Material</label>${modalSelectorMarkup('material', 'Seleccione un material')}</div>
+          <div class="col-md-3"><label class="form-label" for="cantidad">Cantidad</label><input id="cantidad" class="form-control" type="number" min="1" step="1" required/></div>
+        </div>
+        <div class="mt-2"><button class="btn btn-primary" id="guardar">Guardar</button>
+          <button class="btn btn-secondary" id="cancelar" type="button">Cancelar</button></div>
+      </div>`;
+    initModalSelector('proyecto', 'proyecto', proyectos.map(p=>({value:p.idProyecto,label:`${p.codigo} - ${p.cliente}`})));
+    initModalSelector('material', 'material', materiales.map(m=>({value:m.idMaterial,label:`${m.codigo} - ${m.nombre}`})));
+    el('proyecto').value=''; el('proyectoDisplay').value='';
+    el('material').value=''; el('materialDisplay').value='';
+    const abrir = d => {
+      idEditando = d ? d.idMerma : null;
+      el('tituloFormulario').textContent = d ? `Editar registro #${d.idMerma}` : 'Registrar devolución';
+      el('proyecto').value = d ? String(d.idProyecto) : '';
+      el('material').value = d ? String(d.idMaterial) : '';
+      const proyecto = d ? proyectos.find(p=>p.idProyecto===d.idProyecto) : null;
+      const material = d ? materiales.find(m=>m.idMaterial===d.idMaterial) : null;
+      el('proyectoDisplay').value = proyecto ? `${proyecto.codigo} - ${proyecto.cliente}` : '';
+      el('materialDisplay').value = material ? `${material.codigo} - ${material.nombre}` : '';
+      el('cantidad').value = d ? d.cantidad : '';
+      el('form').style.display='block';
+      el('form').scrollIntoView({behavior:'smooth',block:'start'});
+    };
+    el('nueva').onclick=()=>abrir(null);
+    el('cancelar').onclick=()=>{el('form').style.display='none';};
+    el('guardar').onclick=async()=>{
+      const body={idProyecto:parseInt(el('proyecto').value),idMaterial:parseInt(el('material').value),cantidad:parseInt(el('cantidad').value)};
+      if(!body.idProyecto||!body.idMaterial||!body.cantidad||body.cantidad<1){alert('Seleccione proyecto, material y una cantidad válida.');return;}
+      try{
+        if(idEditando===null) await postJson('/api/merma/devoluciones',body);
+        else await putJson('/api/merma/devoluciones/'+idEditando,body);
+        window.location.reload();
+      }catch(e){alert(e.message);}
+    };
+    window.editar=id=>{const d=datos.find(x=>x.idMerma===id);if(d)abrir(d);};
+    window.reintegrar=async id=>{try{await postJson('/api/merma/devoluciones/'+id+'/reintegrar',{});window.location.reload();}catch(e){alert(e.message);}};
+    window.marcarMerma=async id=>{const motivo=prompt('Motivo de la merma:');if(!motivo||!motivo.trim())return;try{await postJson('/api/merma/devoluciones/'+id+'/marcar-merma',{motivo:motivo.trim()});window.location.reload();}catch(e){alert(e.message);}};
+    window.validar=async id=>{if(!confirm('¿Validar la baja por merma?'))return;try{await postJson('/api/merma/devoluciones/'+id+'/validar',{});window.location.reload();}catch(e){alert(e.message);}};
+    window.anular=async id=>{const motivo=prompt('Indique el motivo de anulación. Si ya fue procesado, se hará el movimiento compensatorio de stock.');if(!motivo||!motivo.trim())return;try{await api('/api/merma/devoluciones/'+id,{method:'DELETE',body:JSON.stringify({motivo:motivo.trim()})});window.location.reload();}catch(e){alert(e.message);}};
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + esc(e.message) + '</div>'; }
+})();
+</script>
+</body></html>

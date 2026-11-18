@@ -1,0 +1,38 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Bandeja de despachos')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Bandeja de despachos</h3>
+        <p class="text-muted small mb-3">P2-T10, P3-T01 · RF19</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const datos = await getJson('/api/despacho/bandeja');
+    el('contenido').innerHTML = datos.length ? `
+    <table class="table table-sm"><thead><tr><th>ID</th><th>Proyecto</th><th>Cliente</th><th>Fecha</th><th>Pendiente</th><th>Tipo</th></tr></thead>
+    <tbody>${datos.map(b=>`<tr>
+      <td>${b.idSolicitud}</td><td>${esc(b.codigoProyecto)}</td><td>${esc(b.cliente)}</td>
+      <td>${fmtFecha(b.fechaSolicitud)}</td><td>${b.totalPendiente}</td>
+      <td>${b.esParcial?'<span class="badge bg-info">PARCIAL</span>':'<span class="badge bg-success">NUEVA</span>'}</td>
+    </tr>`).join('')}</tbody></table>
+    <p class="small text-muted">Para registrar el despacho, use la pantalla "Preparar despacho".</p>` : '<p class="text-muted">No hay solicitudes para despachar.</p>';
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

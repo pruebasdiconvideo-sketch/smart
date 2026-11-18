@@ -1,8 +1,9 @@
 package com.smartpoweron.gestion_materiales.model;
 
+import com.smartpoweron.gestion_materiales.entity.Material;
 import jakarta.persistence.*;
 
-@Entity
+@Entity(name = "ProduccionDetalleSolicitud")
 @Table(name = "detalle_solicitud")
 public class DetalleSolicitud {
 

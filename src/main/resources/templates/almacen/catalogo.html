@@ -1,0 +1,136 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Catálogo de materiales')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Catálogo de materiales</h3>
+        <p class="text-muted small mb-3">P1-T05, P1-T10, P1-T11 · RF05, RF06, RF07</p>
+        <div class="card">
+          <div class="card-body">
+            <span id="puedeEditar" sec:authorize="hasAnyRole('ALMACENERO','ADMIN')" hidden></span>
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  const puedeEditar = Boolean(el('puedeEditar'));
+  const campos = [
+    ['codigo', 'Código', 'text', true], ['nombre', 'Nombre', 'text', true],
+    ['especificacionTecnica', 'Especificación técnica', 'text', false],
+    ['descripcion', 'Descripción', 'text', false], ['categoria', 'Categoría', 'text', false],
+    ['marca', 'Marca', 'text', false], ['unidadMedida', 'Unidad de medida', 'text', false],
+    ['modelo', 'Modelo', 'text', false], ['numeroSerie', 'Número de serie', 'text', false],
+    ['mlfb', 'MLFB', 'text', false], ['pasillo', 'Pasillo', 'text', false],
+    ['estante', 'Estante', 'text', false], ['nivel', 'Nivel', 'text', false],
+    ['precioUnitario', 'Precio unitario', 'number', true], ['stockMinimo', 'Stock mínimo', 'number', true]
+  ];
+  let materiales = [];
+  let materialEditando = null;
+  const valorCampos = m => Object.fromEntries(campos.map(([id]) => [id, m[id] ?? '']));
+
+  function dibujar(lista) {
+    const camposFormulario = campos.map(([id, label, type, required]) => `
+      <div class="col-md-4"><label class="form-label" for="material-${id}">${label}</label>
+      <input class="form-control" id="material-${id}" type="${type}" ${required ? 'required' : ''}
+        ${type === 'number' ? (id === 'precioUnitario' ? 'min="0" step="0.01"' : 'min="0" step="1"') : ''}
+        placeholder="${label}"/></div>`).join('');
+    el('contenido').innerHTML = `
+      ${puedeEditar ? '<button class="btn btn-primary mb-3" id="nuevoMaterial">Nuevo material</button>' : ''}
+      <form class="row g-2 mb-3" id="filtros">
+        <div class="col-md-3"><input class="form-control" id="fCodigo" placeholder="Código"/></div>
+        <div class="col-md-3"><input class="form-control" id="fNombre" placeholder="Nombre"/></div>
+        <div class="col-md-3"><input class="form-control" id="fCat" placeholder="Categoría"/></div>
+        <div class="col-md-3"><button class="btn btn-outline-primary" type="submit">Filtrar</button>
+          <button class="btn btn-outline-secondary" type="button" id="limpiar">Limpiar</button></div>
+      </form>
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Stock</th><th>Mínimo</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>${lista.map(m=>`<tr>
+          <td>${esc(m.codigo)}</td><td>${esc(m.nombre)}</td><td>${esc(m.categoria||'')}</td>
+          <td>${fmtMonto(m.precioUnitario)}</td>
+          <td class="${m.enAlerta?'text-danger fw-bold':''}">${m.stockActual}</td>
+          <td>${m.stockMinimo}</td>
+          <td>${m.estado === 'ACTIVO' ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>'}
+            ${m.enAlerta?'<span class="alerta ms-1">ALERTA</span>':''}</td>
+          <td>${puedeEditar ? (m.estado === 'ACTIVO'
+            ? `<button class="btn btn-sm btn-outline-primary me-1" onclick="editarMaterial(${m.idMaterial})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="desactivarMaterial(${m.idMaterial})">Desactivar</button>`
+            : `<button class="btn btn-sm btn-outline-success" onclick="reactivarMaterial(${m.idMaterial})">Reactivar</button>`) : ''}</td>
+        </tr>`).join('')}</tbody></table></div>
+      ${puedeEditar ? `<div id="formMaterial" class="card p-3 mt-3" style="display:none">
+        <h6 id="tituloMaterial">Nuevo material</h6><form id="datosMaterial" class="row g-2">
+          ${camposFormulario}
+          <div class="col-12"><button class="btn btn-primary" type="submit">Guardar</button>
+            <button class="btn btn-secondary" type="button" id="cancelarMaterial">Cancelar</button></div>
+        </form></div>` : ''}`;
+
+    el('filtros').onsubmit = event => {
+      event.preventDefault();
+      const codigo = el('fCodigo').value.trim().toLocaleLowerCase();
+      const nombre = el('fNombre').value.trim().toLocaleLowerCase();
+      const categoria = el('fCat').value.trim().toLocaleLowerCase();
+      dibujar(materiales.filter(m => (!codigo || (m.codigo || '').toLocaleLowerCase().includes(codigo))
+        && (!nombre || (m.nombre || '').toLocaleLowerCase().includes(nombre))
+        && (!categoria || (m.categoria || '').toLocaleLowerCase().includes(categoria))));
+      el('fCodigo').value = codigo; el('fNombre').value = nombre; el('fCat').value = categoria;
+    };
+    el('limpiar').onclick = () => dibujar(materiales);
+    if (!puedeEditar) return;
+    el('nuevoMaterial').onclick = () => abrirFormulario(null);
+    el('cancelarMaterial').onclick = () => abrirFormulario(null, false);
+    el('datosMaterial').onsubmit = async event => {
+      event.preventDefault();
+      try {
+        const body = {};
+        campos.forEach(([id, , type]) => {
+          const value = el('material-' + id).value.trim();
+          body[id] = type === 'number' ? Number(value) : (value || null);
+        });
+        if (materialEditando === null) await postJson('/api/almacen/materiales', body);
+        else await putJson('/api/almacen/materiales/' + materialEditando, body);
+        window.location.reload();
+      } catch (e) { alert(e.message); }
+    };
+  }
+
+  function abrirFormulario(m, mostrar = true) {
+    materialEditando = m ? m.idMaterial : null;
+    el('tituloMaterial').textContent = m ? 'Editar material' : 'Nuevo material';
+    el('datosMaterial').reset();
+    if (m) {
+      const valores = valorCampos(m);
+      campos.forEach(([id]) => { el('material-' + id).value = valores[id]; });
+    }
+    el('formMaterial').style.display = mostrar ? 'block' : 'none';
+    if (mostrar) el('formMaterial').scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+
+  try {
+    materiales = await getJson('/api/almacen/materiales?incluirInactivos=true');
+    dibujar(materiales);
+    window.editarMaterial = id => {
+      const material = materiales.find(m => m.idMaterial === id);
+      if (material) abrirFormulario(material);
+    };
+    window.desactivarMaterial = async id => {
+      if (!confirm('¿Desactivar este material? Se conservarán su stock e historial.')) return;
+      try { await api('/api/almacen/materiales/' + id, {method: 'DELETE'}); window.location.reload(); }
+      catch (e) { alert(e.message); }
+    };
+    window.reactivarMaterial = async id => {
+      try { await patch('/api/almacen/materiales/' + id + '/reactivar'); window.location.reload(); }
+      catch (e) { alert(e.message); }
+    };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + esc(e.message) + '</div>'; }
+})();
+</script>
+</body></html>

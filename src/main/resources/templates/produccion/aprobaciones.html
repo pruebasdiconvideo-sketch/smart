@@ -1,0 +1,46 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Aprobación de solicitudes retenidas')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Aprobación de solicitudes retenidas</h3>
+        <p class="text-muted small mb-3">P2-T06 · RF16 (sólo ADMIN)</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const datos = await getJson('/api/produccion/solicitudes?estado=RETENIDA');
+    el('contenido').innerHTML = datos.length ? `
+    <table class="table table-sm"><thead><tr><th>ID</th><th>Proyecto</th><th>Costo</th><th>Presupuesto</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>${datos.map(s=>`<tr>
+      <td>${s.idSolicitud}</td><td>${esc(s.codigoProyecto)}</td>
+      <td>${fmtMonto(s.costoTotal)}</td><td>${fmtMonto(s.presupuesto)}</td>
+      <td><span class="badge bg-warning text-dark">RETENIDA</span></td>
+      <td>
+        <button class="btn btn-sm btn-success" onclick="decidir(${s.idSolicitud}, 'APROBAR')">Aprobar</button>
+        <button class="btn btn-sm btn-danger" onclick="decidir(${s.idSolicitud}, 'RECHAZAR')">Rechazar</button>
+      </td>
+    </tr>`).join('')}</tbody></table>` : '<p class="text-muted">No hay solicitudes retenidas.</p>';
+  window.decidir = async (id, d) => {
+    const ep = d==='APROBAR' ? 'aprobar' : 'rechazar';
+    try { await postJson('/api/produccion/solicitudes/'+id+'/'+ep, {decision: d}); window.location.reload(); }
+    catch(e){ alert(e.message); }
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

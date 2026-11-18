@@ -1,0 +1,101 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Preparar y registrar despacho')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Preparar y registrar despacho</h3>
+        <p class="text-muted small mb-3">P3-T02 a P3-T05 · RF20, RF21, RF22</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const [datos, pendientes] = await Promise.all([
+      getJson('/api/despacho/bandeja'),
+      getJson('/api/despacho/pendientes-confirmacion')
+    ]);
+    el('contenido').innerHTML = `
+    <h5>Despachos pendientes de confirmación</h5>
+    ${pendientes.length ? `<div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID</th><th>Proyecto</th><th>Fecha</th><th>Tipo</th><th>Total</th><th>Acciones</th></tr></thead>
+      <tbody>${pendientes.map(d=>`<tr><td>${d.idDespacho}</td><td>${esc(d.codigoProyecto)}</td><td>${fmtFecha(d.fechaDespacho)}</td>
+        <td>${esc(d.tipo)}</td><td>${d.totalEntregado}</td>
+        <td><button class="btn btn-sm btn-outline-primary me-1" onclick="editarDespacho(${d.idDespacho})">Editar</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="anularDespacho(${d.idDespacho})">Anular</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="text-muted">No hay despachos pendientes.</p>'}
+    <div id="formEdicionDespacho" class="card p-3 mb-4" style="display:none">
+      <h6 id="tituloEdicionDespacho">Editar despacho pendiente</h6>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID detalle</th><th>Código</th><th>Cantidad</th><th></th></tr></thead><tbody id="itemsEditar"></tbody></table></div>
+      <button class="btn btn-primary btn-sm" type="button" id="guardarEdicionDespacho">Guardar cambios</button>
+      <button class="btn btn-secondary btn-sm" type="button" id="cancelarEdicionDespacho">Cancelar</button>
+    </div>
+    <hr/>
+    <form id="form">
+      <div class="mb-3"><label class="form-label">Solicitud</label>
+        ${modalSelectorMarkup('idSol', 'Seleccione una solicitud')}</div>
+      <h6>Ítems del kit (digitados por el almacenero)</h6>
+      <table class="table table-sm"><thead><tr><th>Detalle ID</th><th>Código digitado</th><th>Cantidad</th><th></th></tr></thead>
+      <tbody id="items"><tr><td><input class="form-control" id="det0" type="number"/></td><td><input class="form-control" id="cod0"/></td><td><input type="number" class="form-control" id="can0" min="1"/></td><td></td></tr></tbody></table>
+      <button class="btn btn-secondary btn-sm" id="add">Agregar ítem</button>
+      <button class="btn btn-primary mt-2" id="guardar">Registrar despacho</button>
+      <div id="res" class="mt-3"></div>
+    </form>`;
+  initModalSelector('idSol', 'solicitud', datos.map(b=>({value:b.idSolicitud,label:`#${b.idSolicitud} - ${b.codigoProyecto} - pendiente ${b.totalPendiente}`})));
+  let despachoEditando = null;
+  window.editarDespacho = async id => {
+    try {
+      const despacho = await getJson('/api/despacho/' + id);
+      despachoEditando = id;
+      el('tituloEdicionDespacho').textContent = `Editar despacho #${id}`;
+      el('itemsEditar').innerHTML = despacho.items.map(item=>`<tr>
+        <td><input class="form-control id-detalle-edicion" type="number" value="${item.idDetalleSolicitud}" readonly/></td>
+        <td><input class="form-control codigo-edicion" value="${esc(item.codigoDigitado)}"/></td>
+        <td><input class="form-control cantidad-edicion" type="number" min="1" value="${item.cantidadEntregada}"/></td>
+        <td><button class="btn btn-sm btn-outline-danger quitar-edicion" type="button">Quitar</button></td>
+      </tr>`).join('');
+      document.querySelectorAll('.quitar-edicion').forEach(button=>button.onclick=()=>button.closest('tr').remove());
+      el('formEdicionDespacho').style.display='block';
+      el('formEdicionDespacho').scrollIntoView({behavior:'smooth',block:'start'});
+    } catch(e) { alert(e.message); }
+  };
+  window.anularDespacho = async id => {
+    const motivo=prompt('Indique el motivo para anular este despacho pendiente:');
+    if(!motivo||!motivo.trim())return;
+    try{await api('/api/despacho/'+id,{method:'DELETE',body:JSON.stringify({motivo:motivo.trim()})});window.location.reload();}
+    catch(e){alert(e.message);}
+  };
+  el('cancelarEdicionDespacho').onclick=()=>{el('formEdicionDespacho').style.display='none';despachoEditando=null;};
+  el('guardarEdicionDespacho').onclick=async()=>{
+    const items=[...document.querySelectorAll('#itemsEditar tr')].map(tr=>({
+      idDetalleSolicitud:parseInt(tr.querySelector('.id-detalle-edicion').value),
+      codigoDigitado:tr.querySelector('.codigo-edicion').value.trim(),
+      cantidadEntregada:parseInt(tr.querySelector('.cantidad-edicion').value)
+    }));
+    if(!items.length||items.some(item=>!item.codigoDigitado||!item.cantidadEntregada||item.cantidadEntregada<1)){alert('Complete al menos un detalle con cantidad válida.');return;}
+    const despacho=pendientes.find(item=>item.idDespacho===despachoEditando);
+    if(!despacho){alert('El despacho pendiente ya no está disponible.');return;}
+    try{await putJson('/api/despacho/'+despachoEditando,{idSolicitud:despacho.idSolicitud,items});window.location.reload();}
+    catch(e){alert(e.message);}
+  };
+  let n=1;
+  document.getElementById('add').onclick=()=>{const tb=document.getElementById('items');tb.insertAdjacentHTML('beforeend',`<tr><td><input class="form-control" id="det${n}" type="number"/></td><td><input class="form-control" id="cod${n}"/></td><td><input type="number" class="form-control" id="can${n}" min="1"/></td><td><button class="btn btn-sm btn-link text-danger" onclick="this.parentElement.parentElement.remove()">Quitar</button></td></tr>`);n++;};
+  document.getElementById('guardar').onclick=async()=>{
+    const items=[];document.querySelectorAll('#items tr').forEach((tr)=>{const det=tr.querySelector('input[id^="det"]').value;const cod=tr.querySelector('input[id^="cod"]').value;const can=tr.querySelector('input[id^="can"]').value;if(det&&cod&&can)items.push({idDetalleSolicitud:parseInt(det),codigoDigitado:cod,cantidadEntregada:parseInt(can)});});
+    try{const r=await postJson('/api/despacho',{idSolicitud:parseInt(document.getElementById('idSol').value),items});el('res').innerHTML=`<div class="alert alert-success">Despacho #${r.idDespacho} registrado como <strong>${r.tipo}</strong> en estado ${r.estado}.</div>`;}
+    catch(e){el('res').innerHTML='<div class="alert alert-danger">'+e.message+'</div>';}
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

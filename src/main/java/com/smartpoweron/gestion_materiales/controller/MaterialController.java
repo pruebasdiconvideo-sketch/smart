@@ -1,6 +1,6 @@
 package com.smartpoweron.gestion_materiales.controller;
 
-import com.smartpoweron.gestion_materiales.model.Material;
+import com.smartpoweron.gestion_materiales.entity.Material;
 import com.smartpoweron.gestion_materiales.service.MaterialService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;

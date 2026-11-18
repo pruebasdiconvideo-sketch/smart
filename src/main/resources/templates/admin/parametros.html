@@ -1,0 +1,89 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Rangos técnicos de pruebas')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Rangos técnicos de pruebas</h3>
+        <p class="text-muted small mb-3">P4-T10 · RF30 (sólo ADMIN)</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    let datos = await getJson('/api/admin/parametros-prueba?incluirInactivos=true');
+    let idEditando = null;
+    el('contenido').innerHTML = `
+    <button class="btn btn-primary mb-3" id="nuevo">Nuevo parámetro</button>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID</th><th>Tipo</th><th>Unidad</th><th>Mínimo</th><th>Máximo</th><th>Norma</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>${datos.map(p=>`<tr>
+      <td>${p.idParametro}</td><td>${esc(p.tipoPrueba)}</td><td>${esc(p.unidad)}</td>
+      <td>${p.valorMinimo}</td><td>${p.valorMaximo}</td><td>${esc(p.normaReferencia||'')}</td>
+      <td>${p.activo?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-secondary">Inactivo</span>'}</td>
+      <td>${p.activo?`<button class="btn btn-sm btn-outline-primary me-1" onclick="editar(${p.idParametro})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="desactivar(${p.idParametro})">Desactivar</button>`:`<button class="btn btn-sm btn-outline-success" onclick="reactivar(${p.idParametro})">Reactivar</button>`}</td>
+    </tr>`).join('')}</tbody></table></div>
+    <div id="form" class="card p-3" style="display:none">
+      <h6 id="tituloFormulario">Nuevo parámetro de prueba</h6>
+      <div class="row g-2">
+        <div class="col-md-3"><input class="form-control" id="tipo" placeholder="Tipo de prueba" required/></div>
+        <div class="col-md-2"><input class="form-control" id="unidad" placeholder="Unidad" required/></div>
+        <div class="col-md-2"><input class="form-control" id="min" type="number" step="0.001" placeholder="Mínimo" required/></div>
+        <div class="col-md-2"><input class="form-control" id="max" type="number" step="0.001" placeholder="Máximo" required/></div>
+        <div class="col-md-3"><input class="form-control" id="norma" placeholder="Norma de referencia"/></div>
+      </div>
+      <div class="mt-2"><button class="btn btn-primary" id="guardar">Guardar</button>
+        <button class="btn btn-secondary" id="cancelar" type="button">Cancelar</button></div>
+    </div>`;
+  const abrirFormulario = parametro => {
+    idEditando = parametro ? parametro.idParametro : null;
+    el('tituloFormulario').textContent = parametro ? 'Editar parámetro' : 'Nuevo parámetro de prueba';
+    el('tipo').value = parametro ? parametro.tipoPrueba : '';
+    el('unidad').value = parametro ? parametro.unidad : '';
+    el('min').value = parametro ? parametro.valorMinimo : '';
+    el('max').value = parametro ? parametro.valorMaximo : '';
+    el('norma').value = parametro ? (parametro.normaReferencia || '') : '';
+    el('form').style.display = 'block';
+    el('form').scrollIntoView({behavior: 'smooth', block: 'start'});
+  };
+  el('nuevo').onclick = () => abrirFormulario(null);
+  el('cancelar').onclick = () => { el('form').style.display = 'none'; };
+  window.editar = id => {
+    const parametro = datos.find(p => p.idParametro === id);
+    if (parametro) abrirFormulario(parametro);
+  };
+  document.getElementById('guardar').onclick = async () => {
+    try {
+      const body = {tipoPrueba: el('tipo').value.trim(), unidad: el('unidad').value.trim(),
+        valorMinimo: parseFloat(el('min').value), valorMaximo: parseFloat(el('max').value),
+        normaReferencia: el('norma').value.trim() || null};
+      if (idEditando === null) await postJson('/api/admin/parametros-prueba', body);
+      else await putJson('/api/admin/parametros-prueba/' + idEditando, body);
+      window.location.reload();
+    }
+    catch(e){ alert(e.message); }
+  };
+  window.desactivar = async id => {
+    if (!confirm('¿Desactivar este parámetro? Las pruebas históricas se conservarán.')) return;
+    try { await api('/api/admin/parametros-prueba/' + id, {method: 'DELETE'}); window.location.reload(); }
+    catch(e){ alert(e.message); }
+  };
+  window.reactivar = async id => {
+    try { await patch('/api/admin/parametros-prueba/' + id + '/reactivar'); window.location.reload(); }
+    catch(e){ alert(e.message); }
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>

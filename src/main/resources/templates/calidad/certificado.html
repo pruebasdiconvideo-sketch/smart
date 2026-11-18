@@ -1,0 +1,46 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: 'Times New Roman', serif; color:#222; margin:40px; }
+    .header { text-align:center; border-bottom:3px solid #0d4b8c; padding-bottom:12px; margin-bottom:24px; }
+    .header h1 { color:#0d4b8c; margin:0; }
+    .header small { color:#666; }
+    table { width:100%; border-collapse:collapse; margin-top:16px; }
+    th, td { border:1px solid #ccc; padding:8px; text-align:left; font-size:12px; }
+    th { background:#0d4b8c; color:#fff; }
+    .ok { color:#198754; font-weight:bold; }
+    .firma { margin-top:48px; text-align:center; }
+    .linea { border-top:1px solid #333; width:280px; margin:64px auto 4px auto; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 th:text="${titulo}">Certificado de Conformidad</h1>
+    <small th:text="${empresa} + ' · RUC ' + ${ruc} + ' · ' + ${direccion}">Smart Power On S.A.C.</small>
+  </div>
+  <p><strong>Proyecto:</strong> <span th:text="${proyecto.codigo} + ' - ' + ${proyecto.cliente}"></span></p>
+  <p><strong>Fecha de emisión:</strong> <span th:text="${fecha}"></span></p>
+  <p>Por la presente se certifica que el tablero del proyecto indicado ha superado
+     todas las pruebas funcionales conforme a los rangos técnicos vigentes,
+     cumpliendo la regla R-CAL-02 (última medición de cada parámetro CONFORME).</p>
+  <table>
+    <thead><tr><th>Parámetro</th><th>Unidad</th><th>Rango</th><th>Valor medido</th><th>Resultado</th></tr></thead>
+    <tbody>
+      <tr th:each="p:${pruebas}">
+        <td th:text="${p.tipoPrueba}"></td>
+        <td th:text="${p.unidad}"></td>
+        <td><span th:text="${p.valorMinimo}"></span> - <span th:text="${p.valorMaximo}"></span></td>
+        <td th:text="${p.valorMedido}"></td>
+        <td class="ok" th:text="${p.resultado}"></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="firma">
+    <div class="linea"></div>
+    <small>Inspector responsable</small><br/>
+    <small th:text="${pruebas[0].inspector}"></small>
+  </div>
+</body>
+</html>

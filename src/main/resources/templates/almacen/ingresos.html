@@ -1,0 +1,110 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Ingreso de materiales contra orden de compra')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Ingreso de materiales contra orden de compra</h3>
+        <p class="text-muted small mb-3">P1-T02 a P1-T07 · RF08, RF09, RF10</p>
+        <div class="card">
+          <div class="card-body">
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  try {
+    const ordenes = await getJson('/api/almacen/ordenes-compra?incluirCerradas=true');
+    // Renderizar selección modal de OC + formulario de ingreso.
+  const ocs = ordenes.filter(o => o.estado === 'ABIERTA');
+  el('contenido').innerHTML = `
+    <h5>Órdenes de compra</h5>
+    <button class="btn btn-primary btn-sm mb-2" id="nuevaOrden">Nueva orden</button>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Código</th><th>Proveedor</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>${ordenes.map(o=>`<tr><td>${esc(o.codigo)}</td><td>${esc(o.proveedor)}</td><td>${esc(o.fechaEmision)}</td>
+        <td>${o.estado === 'ABIERTA' ? '<span class="badge bg-success">Abierta</span>' : '<span class="badge bg-secondary">Cerrada</span>'}</td>
+        <td>${o.estado === 'ABIERTA' ? `<button class="btn btn-sm btn-outline-primary me-1" onclick="editarOrden(${o.idOrdenCompra})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="cerrarOrden(${o.idOrdenCompra})">Cerrar</button>` : `<button class="btn btn-sm btn-outline-success" onclick="reabrirOrden(${o.idOrdenCompra})">Reabrir</button>`}</td></tr>`).join('')}</tbody></table></div>
+    <div id="formOrden" class="card p-3 mb-4" style="display:none">
+      <h6 id="tituloOrden">Nueva orden de compra</h6>
+      <div class="row g-2">
+        <div class="col-md-4"><input class="form-control" id="codigoOrden" placeholder="Código" required/></div>
+        <div class="col-md-4"><input class="form-control" id="proveedorOrden" placeholder="Proveedor" required/></div>
+        <div class="col-md-4"><input class="form-control" id="fechaOrden" type="date" required/></div>
+      </div>
+      <div class="mt-2"><button class="btn btn-primary btn-sm" id="guardarOrden">Guardar</button>
+        <button class="btn btn-secondary btn-sm" id="cancelarOrden" type="button">Cancelar</button></div>
+    </div>
+    <hr/>
+    <div class="mb-3"><label class="form-label">Orden de compra (sólo ABIERTAS - PF-11)</label>
+      ${modalSelectorMarkup('idOC', 'Seleccione una orden de compra')}</div>
+    <h6>Ítems recibidos (digitar código y cantidad)</h6>
+    <table class="table table-sm"><thead><tr><th>Código</th><th>Cantidad</th><th></th></tr></thead>
+    <tbody id="items"><tr><td><input class="form-control" id="cod0"/></td><td><input type="number" class="form-control" id="can0" min="1"/></td><td></td></tr></tbody></table>
+    <button class="btn btn-secondary btn-sm" id="add">Agregar ítem</button>
+    <button class="btn btn-primary" id="guardar">Registrar ingreso</button>
+    <div id="res" class="mt-3"></div>`;
+  initModalSelector('idOC', 'orden de compra', ocs.map(o=>({value:o.idOrdenCompra,label:`${o.codigo} - ${o.proveedor}`})));
+  let ordenEditando = null;
+  const abrirOrden = orden => {
+    ordenEditando = orden ? orden.idOrdenCompra : null;
+    el('tituloOrden').textContent = orden ? 'Editar orden de compra' : 'Nueva orden de compra';
+    el('codigoOrden').value = orden ? orden.codigo : '';
+    el('proveedorOrden').value = orden ? orden.proveedor : '';
+    el('fechaOrden').value = orden ? orden.fechaEmision : new Date().toISOString().slice(0, 10);
+    el('formOrden').style.display = 'block';
+    el('formOrden').scrollIntoView({behavior: 'smooth', block: 'start'});
+  };
+  el('nuevaOrden').onclick = () => abrirOrden(null);
+  el('cancelarOrden').onclick = () => { el('formOrden').style.display = 'none'; };
+  el('guardarOrden').onclick = async () => {
+    const body = {codigo: el('codigoOrden').value.trim(), proveedor: el('proveedorOrden').value.trim(), fechaEmision: el('fechaOrden').value};
+    try {
+      if (ordenEditando === null) await postJson('/api/almacen/ordenes-compra', body);
+      else await putJson('/api/almacen/ordenes-compra/' + ordenEditando, body);
+      window.location.reload();
+    } catch (e) { alert(e.message); }
+  };
+  window.editarOrden = id => {
+    const orden = ordenes.find(o => o.idOrdenCompra === id);
+    if (orden) abrirOrden(orden);
+  };
+  window.cerrarOrden = async id => {
+    if (!confirm('¿Cerrar esta orden? Ya no se podrá registrar nuevos ingresos asociados.')) return;
+    try { await api('/api/almacen/ordenes-compra/' + id, {method: 'DELETE'}); window.location.reload(); }
+    catch (e) { alert(e.message); }
+  };
+  window.reabrirOrden = async id => {
+    try { await patch('/api/almacen/ordenes-compra/' + id + '/reabrir'); window.location.reload(); }
+    catch (e) { alert(e.message); }
+  };
+  let n = 1;
+  document.getElementById('add').onclick = () => {
+    const tb = document.getElementById('items');
+    tb.insertAdjacentHTML('beforeend', `<tr><td><input class="form-control" id="cod${n}"/></td><td><input type="number" class="form-control" id="can${n}" min="1"/></td><td><button class="btn btn-sm btn-link text-danger" onclick="this.parentElement.parentElement.remove()">Quitar</button></td></tr>`);
+    n++;
+  };
+  document.getElementById('guardar').onclick = async () => {
+    const items = [];
+    document.querySelectorAll('#items tr').forEach((tr,i) => {
+      const cod = tr.querySelector('input[id^="cod"]').value;
+      const can = tr.querySelector('input[id^="can"]').value;
+      if (cod && can) items.push({codigo: cod, cantidad: parseInt(can)});
+    });
+    try {
+      const r = await postJson('/api/almacen/ingresos', {idOrdenCompra: parseInt(document.getElementById('idOC').value), items});
+      el('res').innerHTML = `<div class="alert ${r.exito?'alert-success':'alert-warning'}"><strong>${esc(r.mensaje)}</strong><ul class="mb-0 mt-2">${(r.detalle||[]).map(d=>'<li>'+esc(d)+'</li>').join('')}</ul>${(r.materialesNoRegistrados||[]).length?'<div class="mt-2">Materiales no registrados: '+r.materialesNoRegistrados.map(esc).join(', ')+' (regístrelos en el catálogo).</div>':''}</div>`;
+    } catch(e){ el('res').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+  };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+})();
+</script>
+</body></html>
