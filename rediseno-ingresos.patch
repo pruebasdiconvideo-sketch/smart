@@ -1,0 +1,1274 @@
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/dto/Dtos.java b/src/main/java/com/smartpoweron/gestion_materiales/dto/Dtos.java
+index 7feb83a..244eea2 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/dto/Dtos.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/dto/Dtos.java
+@@ -224,6 +224,7 @@ public class Dtos {
+         private String unidadMedida;
+         private Integer cantidad;
+         private BigDecimal precioUnitario;
++        private Integer cantidadRecibida; // unidades ya ingresadas contra esta OC (solo lectura)
+     }
+ 
+     @Data @Builder @NoArgsConstructor @AllArgsConstructor
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/repository/TrazabilidadRepository.java b/src/main/java/com/smartpoweron/gestion_materiales/repository/TrazabilidadRepository.java
+index 10d2c91..3e5dffd 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/repository/TrazabilidadRepository.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/repository/TrazabilidadRepository.java
+@@ -2,9 +2,16 @@ package com.smartpoweron.gestion_materiales.repository;
+ 
+ import com.smartpoweron.gestion_materiales.entity.Trazabilidad;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Query;
++import org.springframework.data.repository.query.Param;
+ import org.springframework.stereotype.Repository;
+ 
+ @Repository
+ public interface TrazabilidadRepository extends JpaRepository<Trazabilidad, Long> {
+     java.util.List<Trazabilidad> findByIdMaterialOrderByIdTrazabilidadDesc(Long idMaterial);
++
++    /** Unidades ya ingresadas de un material contra una OC (suma de movimientos ENTRADA). */
++    @Query("select coalesce(sum(t.cantidad), 0) from Trazabilidad t " +
++           "where t.idOrdenCompra = :oc and t.idMaterial = :mat and t.tipoMovimiento = 'ENTRADA'")
++    long sumarEntradasPorOc(@Param("oc") Long idOrdenCompra, @Param("mat") Long idMaterial);
+ }
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/service/MaterialService.java b/src/main/java/com/smartpoweron/gestion_materiales/service/MaterialService.java
+index 64e5bf3..8d58b90 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/service/MaterialService.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/service/MaterialService.java
+@@ -176,6 +176,7 @@ public class MaterialService {
+         }
+         List<String> detalle = new ArrayList<>();
+         List<String> noRegistrados = new ArrayList<>();
++        List<DetalleOrdenCompra> lineasOc = detalleOcRepo.findByIdOrdenCompra(oc.getIdOrdenCompra());
+ 
+         for (Dtos.IngresoItem item : req.getItems()) {
+             List<String> series = item.getNumeroSeries();
+@@ -195,6 +196,20 @@ public class MaterialService {
+             if (!"ACTIVO".equals(m.getEstado())) {
+                 throw new ReglaNegocioException("El material " + m.getCodigo() + " está inactivo.");
+             }
++            // La cantidad ingresada no puede superar lo pendiente de la OC (si la OC tiene líneas)
++            if (!lineasOc.isEmpty()) {
++                int pedido = lineasOc.stream()
++                        .filter(l -> m.getIdMaterial().equals(l.getIdMaterial()))
++                        .mapToInt(l -> l.getCantidad() == null ? 0 : l.getCantidad()).sum();
++                if (pedido == 0) {
++                    throw new ReglaNegocioException("El material " + m.getCodigo() + " no forma parte de la orden " + oc.getCodigo() + ".");
++                }
++                long recibido = trazabilidadService.entradasPorOc(oc.getIdOrdenCompra(), m.getIdMaterial());
++                if (recibido + cantidad > pedido) {
++                    throw new ReglaNegocioException("Excede la orden: " + m.getCodigo() + " pidió " + pedido
++                            + ", ya ingresaron " + recibido + " y intenta ingresar " + cantidad + ".");
++                }
++            }
+             // Informe: "Número de serie único por cada producto" — validar y registrar una instancia por unidad
+             if (conSeries) {
+                 java.util.Set<String> vistas = new java.util.HashSet<>();
+@@ -440,6 +455,7 @@ public class MaterialService {
+                 .nombreMaterial(nombre)
+                 .categoria(categoria)
+                 .unidadMedida(unidad)
++                .cantidadRecibida((int) trazabilidadService.entradasPorOc(d.getIdOrdenCompra(), d.getIdMaterial()))
+                 .build();
+     }
+ 
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/service/TrazabilidadService.java b/src/main/java/com/smartpoweron/gestion_materiales/service/TrazabilidadService.java
+index 80b1e04..d60b259 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/service/TrazabilidadService.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/service/TrazabilidadService.java
+@@ -65,6 +65,13 @@ public class TrazabilidadService {
+         trazRepo.save(t);   // sólo INSERT (RNF07)
+     }
+ 
++    /** Unidades ya ingresadas de un material contra una orden de compra. */
++    @Transactional(readOnly = true)
++    public long entradasPorOc(Long idOrdenCompra, Long idMaterial) {
++        if (idOrdenCompra == null || idMaterial == null) return 0L;
++        return trazRepo.sumarEntradasPorOc(idOrdenCompra, idMaterial);
++    }
++
+     /** RF36: historial de un material por su código de fabricante. */
+     @Transactional(readOnly = true)
+     public List<Dtos.TrazabilidadDto> consultarPorMaterial(String codigo) {
+diff --git a/src/main/resources/static/css/styles.css b/src/main/resources/static/css/styles.css
+index b196798..e616937 100644
+--- a/src/main/resources/static/css/styles.css
++++ b/src/main/resources/static/css/styles.css
+@@ -728,3 +728,123 @@ header.topbar .btn-logout:hover {
+ ::-webkit-scrollbar-track { background: transparent; }
+ ::-webkit-scrollbar-thumb { background: var(--sp-border); border-radius: 999px; border: 2px solid var(--sp-bg); }
+ ::-webkit-scrollbar-thumb:hover { background: var(--sp-text-light); }
++
++/* =====================================================================
++   Ingreso de materiales (órdenes de compra, modales de material y series)
++   ===================================================================== */
++[hidden] { display: none !important; }
++
++.oc-toolbar {
++  display: flex; align-items: center; justify-content: space-between;
++  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
++}
++.oc-search { position: relative; flex: 1 1 280px; max-width: 420px; }
++.oc-search i {
++  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
++  color: var(--sp-text-light); font-size: 14px; pointer-events: none;
++}
++.oc-search .form-control { padding-left: 36px; background: var(--sp-bg); }
++
++.oc-table thead th {
++  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
++  color: var(--sp-text-muted); font-weight: 600;
++  background: var(--sp-bg); border-bottom: 1px solid var(--sp-border); white-space: nowrap;
++}
++.oc-table > tbody > tr > td { padding: 12px 12px; vertical-align: middle; }
++.oc-table .oc-toggle { color: var(--sp-text-muted); text-decoration: none; }
++.oc-detalle-row > td { background: var(--sp-bg); padding: 12px 16px 16px 40px !important; }
++.oc-detalle thead th { background: transparent; }
++.oc-progress .progress { height: 6px; margin-bottom: 4px; background: var(--sp-border); }
++.oc-progress small { color: var(--sp-text-muted); font-size: 11px; }
++
++.badge-cat {
++  display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
++  padding: 2px 8px; border-radius: 999px;
++  background: var(--sp-primary-50); color: var(--sp-primary); white-space: nowrap;
++}
++
++.oc-footer {
++  display: flex; align-items: center; justify-content: space-between;
++  gap: 12px; flex-wrap: wrap; padding: 14px 18px;
++  background: var(--sp-surface); border-top: 1px solid var(--sp-border);
++}
++.oc-total { color: var(--sp-text-muted); }
++.oc-total strong { font-size: 20px; color: var(--sp-primary); margin-left: 8px; }
++
++.empty-state {
++  text-align: center; padding: 28px 16px; color: var(--sp-text-muted);
++}
++.empty-state > i { display: block; font-size: 30px; margin-bottom: 8px; color: var(--sp-text-light); }
++
++/* ----- Modal: agregar material ----- */
++.mat-list {
++  max-height: 260px; overflow-y: auto;
++  border: 1px solid var(--sp-border); border-radius: var(--sp-radius-sm);
++  background: var(--sp-surface);
++}
++.mat-item {
++  display: flex; align-items: center; justify-content: space-between; gap: 12px;
++  width: 100%; text-align: left; padding: 10px 14px;
++  background: var(--sp-surface); border: 0; border-bottom: 1px solid var(--sp-border);
++  color: var(--sp-text); cursor: pointer; transition: background .1s ease;
++}
++.mat-item:last-child { border-bottom: 0; }
++.mat-item:hover:not(:disabled) { background: var(--sp-primary-50); }
++.mat-item.active { background: var(--sp-primary-50); box-shadow: inset 3px 0 0 var(--sp-primary); }
++.mat-item:disabled { opacity: .5; cursor: not-allowed; }
++.mat-item .mat-main { display: flex; flex-direction: column; min-width: 0; }
++.mat-item .mat-main span { font-size: 12.5px; color: var(--sp-text-muted); }
++.mat-item .mat-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
++.mat-item .mat-side small { font-size: 11px; color: var(--sp-text-muted); }
++.mat-form {
++  margin-top: 16px; padding: 14px 16px;
++  background: var(--sp-bg); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-sm);
++}
++.mat-selected { font-size: 13.5px; margin-bottom: 12px; }
++
++/* ----- Modal: registrar ingreso y series ----- */
++.ing-col-title {
++  font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
++  font-weight: 700; color: var(--sp-text-muted); margin-bottom: 8px;
++}
++.ing-items { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 2px; }
++.ing-item {
++  width: 100%; text-align: left; padding: 12px 14px;
++  background: var(--sp-surface); border: 1px solid var(--sp-border);
++  border-radius: var(--sp-radius-sm); cursor: pointer; transition: border-color .12s, box-shadow .12s;
++}
++.ing-item:hover { border-color: var(--sp-primary-100); box-shadow: var(--sp-shadow-sm); }
++.ing-item.active { border-color: var(--sp-primary); box-shadow: 0 0 0 3px var(--sp-primary-50); }
++.ing-item[data-done] { opacity: .75; }
++.ing-item .progress { height: 5px; background: var(--sp-border); }
++.ing-panel {
++  min-height: 280px; padding: 16px 18px;
++  background: var(--sp-bg); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-sm);
++}
++.ing-gen summary { cursor: pointer; font-size: 12.5px; color: var(--sp-primary); }
++.serie-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 240px; overflow-y: auto; }
++.serie-chip {
++  display: inline-flex; align-items: center; gap: 6px;
++  padding: 3px 4px 3px 4px; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
++  background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: 999px;
++}
++.serie-chip .n {
++  min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
++  display: inline-flex; align-items: center; justify-content: center;
++  background: var(--sp-primary); color: #fff; font-size: 10.5px; font-family: var(--sp-font);
++}
++.serie-chip button {
++  border: 0; background: transparent; color: var(--sp-text-muted);
++  width: 20px; height: 20px; line-height: 1; border-radius: 50%; cursor: pointer;
++}
++.serie-chip button:hover { background: var(--sp-danger-50); color: var(--sp-danger); }
++.serie-empty {
++  padding: 16px; text-align: center; font-size: 13px; color: var(--sp-text-muted);
++  border: 1px dashed var(--sp-border); border-radius: var(--sp-radius-sm); background: var(--sp-surface);
++}
++
++@media (max-width: 576px) {
++  .oc-toolbar .btn-group { width: 100%; }
++  .oc-toolbar .btn-group .btn { flex: 1; }
++  .oc-detalle-row > td { padding-left: 12px !important; }
++}
+diff --git a/src/main/resources/static/js/ingresos.js b/src/main/resources/static/js/ingresos.js
+new file mode 100644
+index 0000000..30fb839
+--- /dev/null
++++ b/src/main/resources/static/js/ingresos.js
+@@ -0,0 +1,639 @@
++/* =====================================================================
++   Smart Power On — Ingreso de materiales contra orden de compra
++   Vista 1: listado de OC · Vista 2: formulario de OC
++   Modal A: agregar/editar material de la OC
++   Modal B: registrar ingreso y asociar números de serie por material
++   Depende de app.js (api, getJson, postJson, putJson, patch, el, esc,
++   fmtMonto, spToast, modalSelectorMarkup, initModalSelector)
++   ===================================================================== */
++(function () {
++  'use strict';
++
++  /* ---------- Estado ---------- */
++  const S = {
++    ordenes: [], proveedores: [], materiales: [],
++    filtro: 'ABIERTA', texto: '',
++    expandidas: new Set(),
++    // formulario de OC
++    editId: null, lineas: [], lineaEdit: null, miMat: null,
++    // ingreso / series
++    oc: null, items: [], stage: {}, sel: null, enviando: false
++  };
++
++  const $ = (id) => document.getElementById(id);
++  const num = (v) => (v === '' || v == null || isNaN(Number(v))) ? 0 : Number(v);
++  const soles = (n) => fmtMonto(n || 0);
++  const modalItem = new bootstrap.Modal($('modalItem'));
++  const modalIngreso = new bootstrap.Modal($('modalIngreso'));
++
++  function hoy() {
++    const d = new Date();
++    const p = (n) => String(n).padStart(2, '0');
++    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
++  }
++  function matPorId(id) { return S.materiales.find(m => m.idMaterial === id); }
++  function mostrarError(box, msg) {
++    box.textContent = msg || '';
++    box.hidden = !msg;
++  }
++
++  /* =================================================================
++     CARGA DE DATOS
++     ================================================================= */
++  async function cargarOrdenes() {
++    S.ordenes = await getJson('/api/almacen/ordenes-compra?incluirCerradas=true') || [];
++    S.ordenes.sort((a, b) => (b.idOrdenCompra || 0) - (a.idOrdenCompra || 0));
++  }
++
++  async function iniciar() {
++    try {
++      const [, proveedores, materiales] = await Promise.all([
++        cargarOrdenes(),
++        getJson('/api/empresa?tipo=PROVEEDOR'),
++        getJson('/api/almacen/materiales')
++      ]);
++      S.proveedores = proveedores || [];
++      S.materiales = (materiales || []).filter(m => m.estado === 'ACTIVO');
++    } catch (e) {
++      $('tablaOcs').innerHTML = '<tr><td colspan="7" class="text-danger p-3">' + esc(e.message) + '</td></tr>';
++      return;
++    }
++
++    // Selector de proveedor (modal de búsqueda ya existente en app.js)
++    $('proveedorHost').innerHTML = modalSelectorMarkup('proveedorSel', 'Buscar y seleccionar proveedor');
++    initModalSelector('proveedorSel', 'proveedor', S.proveedores.map(p => ({
++      value: p.idEmpresa,
++      label: p.razonSocial + ' — RUC ' + p.ruc,
++      meta: p.contactoNombre ? 'Contacto: ' + p.contactoNombre : null
++    })));
++    limpiarProveedor();
++
++    enlazarEventos();
++    renderLista();
++  }
++
++  /* =================================================================
++     VISTA 1 · LISTADO
++     ================================================================= */
++  function resumenOrden(o) {
++    const items = o.items || [];
++    const pedido = items.reduce((s, i) => s + (i.cantidad || 0), 0);
++    const recibido = items.reduce((s, i) => s + Math.min(i.cantidadRecibida || 0, i.cantidad || 0), 0);
++    const total = items.reduce((s, i) => s + (i.cantidad || 0) * (i.precioUnitario || 0), 0);
++    return { pedido, recibido, total, n: items.length };
++  }
++
++  function renderLista() {
++    const q = S.texto.trim().toLowerCase();
++    const lista = S.ordenes.filter(o =>
++      (S.filtro === 'TODAS' || o.estado === S.filtro) &&
++      (!q || [o.codigo, o.proveedor, o.rucProveedor].some(v => v && String(v).toLowerCase().includes(q))));
++
++    if (!lista.length) {
++      $('tablaOcs').innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="bi bi-inbox"></i>' +
++        '<p class="mb-0">No hay órdenes que coincidan con el filtro.</p></div></td></tr>';
++      return;
++    }
++
++    $('tablaOcs').innerHTML = lista.map(o => {
++      const r = resumenOrden(o);
++      const abierta = o.estado === 'ABIERTA';
++      const abierto = S.expandidas.has(o.idOrdenCompra);
++      const pct = r.pedido ? Math.round(r.recibido * 100 / r.pedido) : 0;
++      const completo = r.pedido > 0 && r.recibido >= r.pedido;
++
++      const avance = r.n
++        ? '<div class="oc-progress"><div class="progress"><div class="progress-bar ' + (completo ? 'bg-success' : '') +
++          '" style="width:' + pct + '%"></div></div><small>' + r.recibido + ' / ' + r.pedido + ' unidades</small></div>'
++        : '<span class="text-muted small">Sin materiales</span>';
++
++      const acciones = abierta
++        ? '<button class="btn btn-sm btn-primary" data-act="ingreso" data-id="' + o.idOrdenCompra + '"' + (completo ? ' disabled' : '') + '>' +
++            '<i class="bi bi-upc-scan"></i> Registrar ingreso</button> ' +
++          '<button class="btn btn-sm btn-outline-secondary" data-act="editar" data-id="' + o.idOrdenCompra + '" title="Editar"><i class="bi bi-pencil"></i></button> ' +
++          '<button class="btn btn-sm btn-outline-danger" data-act="cerrar" data-id="' + o.idOrdenCompra + '" title="Cerrar orden"><i class="bi bi-lock"></i></button>'
++        : '<button class="btn btn-sm btn-outline-success" data-act="reabrir" data-id="' + o.idOrdenCompra + '"><i class="bi bi-unlock"></i> Reabrir</button>';
++
++      const detalle = r.n
++        ? '<table class="table table-sm mb-0 oc-detalle"><thead><tr><th>Material</th><th>Categoría</th>' +
++          '<th class="text-end">Pedido</th><th class="text-end">Recibido</th><th class="text-end">Pendiente</th>' +
++          '<th class="text-end">Precio</th><th class="text-end">Subtotal</th></tr></thead><tbody>' +
++          o.items.map(it => {
++            const rec = it.cantidadRecibida || 0;
++            const pen = Math.max(0, (it.cantidad || 0) - rec);
++            return '<tr><td><strong>' + esc(it.codigoMaterial || '—') + '</strong><div class="small text-muted">' + esc(it.nombreMaterial || '') + '</div></td>' +
++              '<td><span class="badge-cat">' + esc(it.categoria || '—') + '</span></td>' +
++              '<td class="text-end">' + it.cantidad + '</td>' +
++              '<td class="text-end">' + rec + '</td>' +
++              '<td class="text-end ' + (pen ? 'text-warning fw-bold' : 'text-success') + '">' + pen + '</td>' +
++              '<td class="text-end">' + soles(it.precioUnitario) + '</td>' +
++              '<td class="text-end">' + soles((it.precioUnitario || 0) * it.cantidad) + '</td></tr>';
++          }).join('') + '</tbody></table>'
++        : '<p class="text-muted mb-0 small">Esta orden no tiene materiales. Use «Editar» para agregarlos.</p>';
++
++      return '<tr class="oc-row">' +
++        '<td><button class="btn btn-link btn-sm p-0 me-1 oc-toggle" data-act="toggle" data-id="' + o.idOrdenCompra + '" aria-label="Ver detalle">' +
++          '<i class="bi bi-chevron-' + (abierto ? 'down' : 'right') + '"></i></button>' +
++          '<strong>' + esc(o.codigo) + '</strong></td>' +
++        '<td>' + esc(o.proveedor) + '<div class="small text-muted">' + (o.rucProveedor ? 'RUC ' + esc(o.rucProveedor) : 'Sin RUC') + '</div></td>' +
++        '<td>' + esc(o.fechaEmision) + '</td>' +
++        '<td>' + avance + '</td>' +
++        '<td class="text-end">' + soles(r.total) + '</td>' +
++        '<td>' + (abierta ? '<span class="badge bg-success">Abierta</span>' : '<span class="badge bg-secondary">Cerrada</span>') + '</td>' +
++        '<td class="text-end text-nowrap">' + acciones + '</td></tr>' +
++        '<tr class="oc-detalle-row"' + (abierto ? '' : ' hidden') + '><td colspan="7">' + detalle + '</td></tr>';
++    }).join('');
++  }
++
++  async function refrescar() {
++    await cargarOrdenes();
++    renderLista();
++  }
++
++  async function accionOrden(act, id) {
++    try {
++      if (act === 'cerrar') {
++        if (!confirm('¿Cerrar esta orden? Ya no se podrán registrar ingresos contra ella.')) return;
++        await api('/api/almacen/ordenes-compra/' + id, { method: 'DELETE' });
++        spToast('Orden cerrada.', 'success');
++      } else if (act === 'reabrir') {
++        await patch('/api/almacen/ordenes-compra/' + id + '/reabrir');
++        spToast('Orden reabierta.', 'success');
++      }
++      await refrescar();
++    } catch (e) { spToast(e.message, 'danger'); }
++  }
++
++  /* =================================================================
++     VISTA 2 · FORMULARIO DE ORDEN
++     ================================================================= */
++  function limpiarProveedor() {
++    el('proveedorSel').value = '';
++    el('proveedorSelDisplay').value = '';
++  }
++
++  function mostrarVista(nombre) {
++    $('vistaLista').hidden = nombre !== 'lista';
++    $('vistaForm').hidden = nombre !== 'form';
++    window.scrollTo({ top: 0 });
++  }
++
++  function abrirForm(orden) {
++    S.editId = orden ? orden.idOrdenCompra : null;
++    $('tituloOrden').textContent = orden ? 'Editar orden ' + orden.codigo : 'Nueva orden de compra';
++    $('codigoOrden').value = orden ? orden.codigo : '';
++    $('fechaOrden').value = orden ? orden.fechaEmision : hoy();
++    limpiarProveedor();
++    if (orden && orden.idEmpresa) {
++      el('proveedorSel').value = orden.idEmpresa;
++      el('proveedorSelDisplay').value = orden.proveedor + (orden.rucProveedor ? ' — RUC ' + orden.rucProveedor : '');
++    }
++    S.lineas = orden && orden.items ? orden.items.map(it => ({
++      idMaterial: it.idMaterial, cantidad: it.cantidad, precio: it.precioUnitario == null ? '' : it.precioUnitario
++    })) : [];
++    renderLineas();
++    mostrarVista('form');
++    if (!orden) $('codigoOrden').focus();
++  }
++
++  function renderLineas() {
++    if (!S.lineas.length) {
++      $('lineasOrden').innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="bi bi-boxes"></i>' +
++        '<p class="mb-2">Aún no agregó materiales a esta orden.</p>' +
++        '<button type="button" class="btn btn-outline-primary btn-sm" data-act="add-vacio"><i class="bi bi-plus-lg"></i> Agregar material</button></div></td></tr>';
++    } else {
++      $('lineasOrden').innerHTML = S.lineas.map((l, i) => {
++        const m = matPorId(l.idMaterial) || {};
++        return '<tr>' +
++          '<td><strong>' + esc(m.codigo || '—') + '</strong><div class="small text-muted">' + esc(m.nombre || '') + '</div></td>' +
++          '<td><span class="badge-cat">' + esc(m.categoria || '—') + '</span></td>' +
++          '<td class="text-end">' + l.cantidad + '</td>' +
++          '<td class="text-end">' + (l.precio === '' ? '<span class="text-muted">—</span>' : soles(l.precio)) + '</td>' +
++          '<td class="text-end fw-bold">' + soles(num(l.cantidad) * num(l.precio)) + '</td>' +
++          '<td class="text-end text-nowrap">' +
++            '<button class="btn btn-sm btn-outline-secondary" data-act="edit-linea" data-i="' + i + '" title="Editar"><i class="bi bi-pencil"></i></button> ' +
++            '<button class="btn btn-sm btn-outline-danger" data-act="del-linea" data-i="' + i + '" title="Quitar"><i class="bi bi-trash"></i></button>' +
++          '</td></tr>';
++      }).join('');
++    }
++    $('totalOrden').textContent = soles(S.lineas.reduce((s, l) => s + num(l.cantidad) * num(l.precio), 0));
++  }
++
++  async function guardarOrden() {
++    const codigo = $('codigoOrden').value.trim();
++    const idEmp = el('proveedorSel').value;
++    if (!codigo) { spToast('Ingrese el código de la orden.', 'warning'); $('codigoOrden').focus(); return; }
++    if (!idEmp) { spToast('Seleccione un proveedor registrado.', 'warning'); return; }
++    if (!$('fechaOrden').value) { spToast('Indique la fecha de emisión.', 'warning'); return; }
++    if (!S.lineas.length) { spToast('Agregue al menos un material a la orden.', 'warning'); return; }
++
++    const body = {
++      codigo,
++      idEmpresa: parseInt(idEmp, 10),
++      fechaEmision: $('fechaOrden').value,
++      items: S.lineas.map(l => ({
++        idMaterial: l.idMaterial,
++        cantidad: parseInt(l.cantidad, 10),
++        precioUnitario: l.precio === '' ? null : parseFloat(l.precio)
++      }))
++    };
++    const btn = $('guardarOrden');
++    btn.disabled = true;
++    try {
++      if (S.editId === null) await postJson('/api/almacen/ordenes-compra', body);
++      else await putJson('/api/almacen/ordenes-compra/' + S.editId, body);
++      spToast('Orden guardada correctamente.', 'success');
++      await refrescar();
++      mostrarVista('lista');
++    } catch (e) { spToast(e.message, 'danger'); }
++    finally { btn.disabled = false; }
++  }
++
++  /* =================================================================
++     MODAL A · AGREGAR / EDITAR MATERIAL DE LA OC
++     ================================================================= */
++  function abrirModalItem(indice) {
++    S.lineaEdit = indice == null ? null : indice;
++    S.miMat = indice == null ? null : S.lineas[indice].idMaterial;
++    $('miTitulo').textContent = indice == null ? 'Agregar material a la orden' : 'Editar material de la orden';
++    $('miGuardar').innerHTML = indice == null
++      ? '<i class="bi bi-check2"></i> Agregar a la orden'
++      : '<i class="bi bi-check2"></i> Guardar cambios';
++    $('miBuscar').value = '';
++    $('miCant').value = indice == null ? '' : S.lineas[indice].cantidad;
++    $('miPrecio').value = indice == null ? '' : S.lineas[indice].precio;
++    mostrarError($('miError'), '');
++    renderMiLista();
++    renderMiSel();
++    modalItem.show();
++  }
++
++  function renderMiLista() {
++    const q = $('miBuscar').value.trim().toLowerCase();
++    const usados = new Set(S.lineas.map((l, i) => i === S.lineaEdit ? null : l.idMaterial));
++    const lista = S.materiales.filter(m =>
++      !q || [m.codigo, m.nombre, m.categoria, m.marca, m.modelo].some(v => v && String(v).toLowerCase().includes(q)));
++    $('miContador').textContent = lista.length + ' de ' + S.materiales.length + ' materiales';
++
++    if (!lista.length) {
++      $('miLista').innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><p class="mb-0">No se encontraron materiales.</p></div>';
++      return;
++    }
++    $('miLista').innerHTML = lista.map(m => {
++      const ya = usados.has(m.idMaterial);
++      const activo = S.miMat === m.idMaterial;
++      return '<button type="button" class="mat-item' + (activo ? ' active' : '') + '" data-id="' + m.idMaterial + '"' + (ya ? ' disabled' : '') + '>' +
++        '<span class="mat-main"><strong>' + esc(m.codigo) + '</strong><span>' + esc(m.nombre) + '</span></span>' +
++        '<span class="mat-side"><span class="badge-cat">' + esc(m.categoria || '—') + '</span>' +
++        '<small>' + (ya ? 'Ya está en la orden' : 'Stock: ' + (m.stockActual == null ? 0 : m.stockActual)) + '</small></span></button>';
++    }).join('');
++  }
++
++  function renderMiSel() {
++    const m = S.miMat ? matPorId(S.miMat) : null;
++    $('miSel').innerHTML = m
++      ? '<i class="bi bi-check-circle-fill text-success"></i> <strong>' + esc(m.codigo) + '</strong> · ' + esc(m.nombre) +
++        ' <span class="badge-cat ms-1">' + esc(m.categoria || '—') + '</span>'
++      : '<i class="bi bi-hand-index"></i> Seleccione un material de la lista';
++    actualizarSubtotal();
++  }
++
++  function actualizarSubtotal() {
++    $('miSubtotal').textContent = soles(num($('miCant').value) * num($('miPrecio').value));
++  }
++
++  function guardarItem() {
++    const cant = parseInt($('miCant').value, 10);
++    if (!S.miMat) return mostrarError($('miError'), 'Seleccione un material.');
++    if (!cant || cant <= 0) return mostrarError($('miError'), 'Ingrese una cantidad mayor que cero.');
++    const precio = $('miPrecio').value;
++    if (precio !== '' && Number(precio) < 0) return mostrarError($('miError'), 'El precio no puede ser negativo.');
++    const linea = { idMaterial: S.miMat, cantidad: cant, precio: precio === '' ? '' : Number(precio) };
++    if (S.lineaEdit == null) S.lineas.push(linea); else S.lineas[S.lineaEdit] = linea;
++    renderLineas();
++    modalItem.hide();
++  }
++
++  /* =================================================================
++     MODAL B · REGISTRAR INGRESO Y ASOCIAR SERIES
++     ================================================================= */
++  function abrirIngreso(id) {
++    const oc = S.ordenes.find(o => o.idOrdenCompra === id);
++    if (!oc) return;
++    S.oc = oc;
++    S.enviando = false;
++
++    // Agrupa por material (por si hubiera líneas repetidas)
++    const grupos = new Map();
++    (oc.items || []).forEach(it => {
++      const g = grupos.get(it.idMaterial);
++      if (g) g.pedido += it.cantidad || 0;
++      else grupos.set(it.idMaterial, {
++        idMaterial: it.idMaterial, codigo: it.codigoMaterial, nombre: it.nombreMaterial,
++        categoria: it.categoria, pedido: it.cantidad || 0, recibido: it.cantidadRecibida || 0
++      });
++    });
++    S.items = Array.from(grupos.values());
++    S.stage = {};
++    S.items.forEach(g => { S.stage[g.idMaterial] = { series: [], sinSerie: false, cantidad: 0 }; });
++    const primero = S.items.find(g => g.pedido - g.recibido > 0) || S.items[0];
++    S.sel = primero ? primero.idMaterial : null;
++
++    $('ingOc').textContent = oc.codigo;
++    $('ingProv').textContent = oc.proveedor + (oc.rucProveedor ? ' · RUC ' + oc.rucProveedor : '') + ' · Emisión ' + oc.fechaEmision;
++    $('ingVacio').hidden = S.items.length > 0;
++    $('ingCuerpo').hidden = S.items.length === 0;
++    mostrarError($('ingError'), '');
++    renderIngreso();
++    modalIngreso.show();
++  }
++
++  const pendiente = (g) => Math.max(0, g.pedido - g.recibido);
++  function enCola(g) {
++    const st = S.stage[g.idMaterial];
++    return st.sinSerie ? (st.cantidad || 0) : st.series.length;
++  }
++
++  function renderIngreso() {
++    renderIngItems();
++    renderIngPanel();
++    renderIngResumen();
++  }
++
++  function renderIngItems() {
++    $('ingItems').innerHTML = S.items.map(g => {
++      const pen = pendiente(g);
++      const cola = enCola(g);
++      const completo = pen === 0;
++      const lleno = !completo && cola >= pen;
++      const estado = completo
++        ? '<span class="badge bg-success">Completo</span>'
++        : cola > 0
++          ? '<span class="badge ' + (lleno ? 'bg-success' : 'bg-warning text-dark') + '">' + cola + ' / ' + pen + ' por registrar</span>'
++          : '<span class="badge bg-light text-dark border">' + pen + ' pendientes</span>';
++      const pct = g.pedido ? Math.min(100, Math.round((g.recibido + cola) * 100 / g.pedido)) : 0;
++      return '<button type="button" class="ing-item' + (S.sel === g.idMaterial ? ' active' : '') + '" data-id="' + g.idMaterial + '"' + (completo ? ' data-done="1"' : '') + '>' +
++        '<div class="d-flex justify-content-between align-items-start gap-2">' +
++          '<div class="text-start"><strong>' + esc(g.codigo) + '</strong><div class="small text-muted">' + esc(g.nombre) + '</div></div>' +
++          estado + '</div>' +
++        '<div class="progress mt-2"><div class="progress-bar ' + (completo || lleno ? 'bg-success' : '') + '" style="width:' + pct + '%"></div></div>' +
++        '<div class="d-flex justify-content-between small text-muted mt-1"><span>' + esc(g.categoria || '—') + '</span>' +
++          '<span>Pedido ' + g.pedido + ' · Recibido ' + g.recibido + '</span></div></button>';
++    }).join('');
++  }
++
++  function renderIngPanel() {
++    const g = S.items.find(x => x.idMaterial === S.sel);
++    if (!g) { $('ingPanel').innerHTML = ''; return; }
++    const st = S.stage[g.idMaterial];
++    const pen = pendiente(g);
++
++    if (pen === 0) {
++      $('ingPanel').innerHTML = '<div class="empty-state"><i class="bi bi-check-circle text-success"></i>' +
++        '<p class="mb-0"><strong>' + esc(g.codigo) + '</strong> ya fue recibido por completo (' + g.recibido + ' de ' + g.pedido + ').</p></div>';
++      return;
++    }
++
++    const modo = st.sinSerie
++      ? '<div class="row g-2 align-items-end mt-2"><div class="col-sm-6"><label class="form-label small mb-1" for="ingCantidad">Unidades recibidas</label>' +
++        '<input type="number" id="ingCantidad" class="form-control" min="0" max="' + pen + '" value="' + (st.cantidad || '') + '" placeholder="0"/></div>' +
++        '<div class="col-sm-6 small text-muted">Máximo pendiente: <strong>' + pen + '</strong></div></div>'
++      : '<label class="form-label small mt-2 mb-1" for="ingSerieIn">Escanee o escriba un número de serie por línea <span class="text-muted">(Enter para agregar)</span></label>' +
++        '<div class="input-group">' +
++          '<textarea id="ingSerieIn" class="form-control" rows="2" placeholder="SN-0001&#10;SN-0002"></textarea>' +
++          '<button class="btn btn-primary" type="button" data-act="serie-add"><i class="bi bi-plus-lg"></i> Agregar</button>' +
++        '</div>' +
++        '<details class="ing-gen mt-2"><summary>Generar correlativos</summary>' +
++          '<div class="row g-2 mt-1">' +
++            '<div class="col-sm-5"><input id="genPrefijo" class="form-control form-control-sm" placeholder="Prefijo (ej. 7SJ62-)"/></div>' +
++            '<div class="col-sm-3"><input id="genDesde" type="number" min="0" class="form-control form-control-sm" value="1" title="Desde"/></div>' +
++            '<div class="col-sm-2"><input id="genCant" type="number" min="1" max="' + pen + '" class="form-control form-control-sm" value="' + Math.max(1, pen - st.series.length) + '" title="Cantidad"/></div>' +
++            '<div class="col-sm-2 d-grid"><button class="btn btn-outline-primary btn-sm" type="button" data-act="serie-gen">Generar</button></div>' +
++          '</div></details>';
++
++    const lista = st.sinSerie ? '' :
++      '<div class="d-flex justify-content-between align-items-center mt-3 mb-1">' +
++        '<span class="ing-col-title mb-0">Series asociadas (' + st.series.length + ' de ' + pen + ')</span>' +
++        (st.series.length ? '<button class="btn btn-link btn-sm text-danger p-0" type="button" data-act="serie-clear">Quitar todas</button>' : '') +
++      '</div>' +
++      (st.series.length
++        ? '<div class="serie-grid">' + st.series.map((s, i) =>
++            '<span class="serie-chip"><span class="n">' + (i + 1) + '</span>' + esc(s) +
++            '<button type="button" data-act="serie-del" data-i="' + i + '" aria-label="Quitar ' + esc(s) + '">&times;</button></span>').join('') + '</div>'
++        : '<div class="serie-empty">Todavía no hay series. Escanee o escriba la primera.</div>');
++
++    $('ingPanel').innerHTML =
++      '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2">' +
++        '<div><div class="fw-bold">' + esc(g.codigo) + ' <span class="badge-cat ms-1">' + esc(g.categoria || '—') + '</span></div>' +
++        '<div class="small text-muted">' + esc(g.nombre) + '</div></div>' +
++        '<div class="text-end small">Pedido <strong>' + g.pedido + '</strong> · Recibido <strong>' + g.recibido + '</strong> · Pendiente <strong>' + pen + '</strong></div>' +
++      '</div>' +
++      '<div class="form-check form-switch mt-3 mb-0">' +
++        '<input class="form-check-input" type="checkbox" id="ingSinSerie"' + (st.sinSerie ? ' checked' : '') + '/>' +
++        '<label class="form-check-label small" for="ingSinSerie">Este material no maneja serie por unidad (ej. cable o canaleta por metro): ingresar solo cantidad</label>' +
++      '</div>' + modo + lista;
++
++    const foco = $('ingSerieIn') || $('ingCantidad');
++    if (foco) foco.focus();
++  }
++
++  function renderIngResumen() {
++    const conCola = S.items.filter(g => enCola(g) > 0);
++    const total = conCola.reduce((s, g) => s + enCola(g), 0);
++    $('ingResumen').textContent = total
++      ? total + ' unidad(es) en ' + conCola.length + ' material(es) listas para registrar'
++      : 'Sin series por registrar';
++    $('ingGuardar').disabled = total === 0 || S.enviando;
++  }
++
++  // Agrega series (texto con varias líneas) respetando pendiente y duplicados
++  function agregarSeries(texto) {
++    const g = S.items.find(x => x.idMaterial === S.sel);
++    if (!g) return;
++    const st = S.stage[g.idMaterial];
++    const pen = pendiente(g);
++    const entradas = String(texto).split(/[\n\r,;\t]+/).map(s => s.trim()).filter(Boolean);
++    if (!entradas.length) return;
++
++    const existentes = new Set();
++    S.items.forEach(x => S.stage[x.idMaterial].series.forEach(s => existentes.add(s.toLowerCase())));
++    const duplicadas = [], largas = [];
++    let sobrantes = 0;
++    entradas.forEach(s => {
++      if (s.length > 100) { largas.push(s.slice(0, 12) + '…'); return; }
++      if (existentes.has(s.toLowerCase())) { duplicadas.push(s); return; }
++      if (st.series.length >= pen) { sobrantes++; return; }
++      st.series.push(s);
++      existentes.add(s.toLowerCase());
++    });
++    if (duplicadas.length) spToast('Serie repetida, no se agregó: ' + duplicadas.slice(0, 3).join(', ') + (duplicadas.length > 3 ? '…' : ''), 'warning');
++    if (largas.length) spToast('Serie demasiado larga (máx. 100 caracteres): ' + largas.join(', '), 'warning');
++    if (sobrantes) spToast('Solo quedaban ' + pen + ' unidades pendientes; se ignoraron ' + sobrantes + ' serie(s).', 'warning');
++    mostrarError($('ingError'), '');
++    renderIngreso();
++  }
++
++  function generarSeries() {
++    const g = S.items.find(x => x.idMaterial === S.sel);
++    const prefijo = $('genPrefijo').value.trim();
++    const desde = parseInt($('genDesde').value, 10);
++    const cant = parseInt($('genCant').value, 10);
++    if (isNaN(desde) || !cant || cant < 1) { spToast('Indique el número inicial y la cantidad a generar.', 'warning'); return; }
++    const ancho = Math.max(4, String(desde + cant - 1).length);
++    const lista = [];
++    for (let i = 0; i < cant; i++) lista.push(prefijo + String(desde + i).padStart(ancho, '0'));
++    agregarSeries(lista.join('\n'));
++  }
++
++  async function registrarIngreso() {
++    if (S.enviando) return;
++    const items = [];
++    S.items.forEach(g => {
++      const st = S.stage[g.idMaterial];
++      if (st.sinSerie) { if (st.cantidad > 0) items.push({ codigo: g.codigo, cantidad: st.cantidad }); }
++      else if (st.series.length) items.push({ codigo: g.codigo, numeroSeries: st.series.slice() });
++    });
++    if (!items.length) return;
++
++    S.enviando = true;
++    $('ingGuardar').disabled = true;
++    $('ingGuardar').innerHTML = '<span class="spinner-border spinner-border-sm"></span> Registrando…';
++    mostrarError($('ingError'), '');
++    try {
++      const r = await postJson('/api/almacen/ingresos', { idOrdenCompra: S.oc.idOrdenCompra, items });
++      if (!r) return;
++      if (r.exito === false) {
++        mostrarError($('ingError'), (r.mensaje || 'No se pudo registrar el ingreso.') +
++          ((r.materialesNoRegistrados || []).length ? ' Materiales no registrados: ' + r.materialesNoRegistrados.join(', ') : ''));
++        return;
++      }
++      spToast((r.detalle || []).join(' · ') || r.mensaje || 'Ingreso registrado.', 'success');
++      modalIngreso.hide();
++      await refrescar();
++    } catch (e) {
++      mostrarError($('ingError'), e.message);
++    } finally {
++      S.enviando = false;
++      $('ingGuardar').innerHTML = '<i class="bi bi-check2-circle"></i> Registrar ingreso';
++      renderIngResumen();
++    }
++  }
++
++  /* =================================================================
++     EVENTOS
++     ================================================================= */
++  function enlazarEventos() {
++    // Lista
++    $('btnNueva').onclick = () => abrirForm(null);
++    $('ocBuscar').addEventListener('input', e => { S.texto = e.target.value; renderLista(); });
++    $('ocFiltro').addEventListener('click', e => {
++      const b = e.target.closest('button[data-f]');
++      if (!b) return;
++      S.filtro = b.dataset.f;
++      $('ocFiltro').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
++      renderLista();
++    });
++    $('tablaOcs').addEventListener('click', e => {
++      const b = e.target.closest('[data-act]');
++      if (!b || b.disabled) return;
++      const id = parseInt(b.dataset.id, 10);
++      switch (b.dataset.act) {
++        case 'toggle':
++          S.expandidas.has(id) ? S.expandidas.delete(id) : S.expandidas.add(id);
++          renderLista(); break;
++        case 'ingreso': abrirIngreso(id); break;
++        case 'editar': abrirForm(S.ordenes.find(o => o.idOrdenCompra === id)); break;
++        default: accionOrden(b.dataset.act, id);
++      }
++    });
++
++    // Formulario de OC
++    $('btnVolver').onclick = () => mostrarVista('lista');
++    $('cancelarOrden').onclick = () => mostrarVista('lista');
++    $('guardarOrden').onclick = guardarOrden;
++    $('btnAddMaterial').onclick = () => abrirModalItem(null);
++    $('lineasOrden').addEventListener('click', e => {
++      const b = e.target.closest('[data-act]');
++      if (!b) return;
++      const i = parseInt(b.dataset.i, 10);
++      if (b.dataset.act === 'add-vacio') abrirModalItem(null);
++      else if (b.dataset.act === 'edit-linea') abrirModalItem(i);
++      else if (b.dataset.act === 'del-linea') { S.lineas.splice(i, 1); renderLineas(); }
++    });
++
++    // Modal A
++    $('miBuscar').addEventListener('input', renderMiLista);
++    $('miLista').addEventListener('click', e => {
++      const b = e.target.closest('.mat-item');
++      if (!b || b.disabled) return;
++      S.miMat = parseInt(b.dataset.id, 10);
++      const m = matPorId(S.miMat);
++      if (m && $('miPrecio').value === '' && m.precioUnitario != null) $('miPrecio').value = m.precioUnitario;
++      renderMiLista();
++      renderMiSel();
++      mostrarError($('miError'), '');
++      $('miCant').focus();
++    });
++    $('miCant').addEventListener('input', actualizarSubtotal);
++    $('miPrecio').addEventListener('input', actualizarSubtotal);
++    $('miCant').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardarItem(); } });
++    $('miPrecio').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardarItem(); } });
++    $('miGuardar').onclick = guardarItem;
++    $('modalItem').addEventListener('shown.bs.modal', () => $('miBuscar').focus());
++
++    // Modal B
++    $('ingItems').addEventListener('click', e => {
++      const b = e.target.closest('.ing-item');
++      if (!b) return;
++      S.sel = parseInt(b.dataset.id, 10);
++      renderIngreso();
++    });
++    $('ingPanel').addEventListener('click', e => {
++      const b = e.target.closest('[data-act]');
++      if (!b) return;
++      const st = S.stage[S.sel];
++      switch (b.dataset.act) {
++        case 'serie-add': { const t = $('ingSerieIn'); agregarSeries(t.value); t.value = ''; break; }
++        case 'serie-gen': generarSeries(); break;
++        case 'serie-del': st.series.splice(parseInt(b.dataset.i, 10), 1); renderIngreso(); break;
++        case 'serie-clear': st.series = []; renderIngreso(); break;
++      }
++    });
++    $('ingPanel').addEventListener('keydown', e => {
++      if (e.target.id === 'ingSerieIn' && e.key === 'Enter' && !e.shiftKey) {
++        e.preventDefault();
++        agregarSeries(e.target.value);
++        e.target.value = '';
++      }
++    });
++    $('ingPanel').addEventListener('change', e => {
++      const g = S.items.find(x => x.idMaterial === S.sel);
++      if (!g) return;
++      const st = S.stage[S.sel];
++      if (e.target.id === 'ingSinSerie') {
++        st.sinSerie = e.target.checked;
++        st.series = []; st.cantidad = 0;
++        renderIngreso();
++      }
++    });
++    $('ingPanel').addEventListener('input', e => {
++      if (e.target.id === 'ingCantidad') {
++        const g = S.items.find(x => x.idMaterial === S.sel);
++        let v = parseInt(e.target.value, 10) || 0;
++        const max = pendiente(g);
++        if (v > max) { v = max; e.target.value = max; spToast('No puede superar lo pendiente (' + max + ').', 'warning'); }
++        S.stage[S.sel].cantidad = Math.max(0, v);
++        renderIngItems();
++        renderIngResumen();
++      }
++    });
++    $('ingGuardar').onclick = registrarIngreso;
++    $('ingEditar').onclick = () => {
++      const oc = S.oc;
++      modalIngreso.hide();
++      abrirForm(oc);
++    };
++  }
++
++  iniciar();
++})();
+diff --git a/src/main/resources/templates/almacen/ingresos.html b/src/main/resources/templates/almacen/ingresos.html
+index 7204a36..259de57 100644
+--- a/src/main/resources/templates/almacen/ingresos.html
++++ b/src/main/resources/templates/almacen/ingresos.html
+@@ -7,204 +7,215 @@
+     <div th:replace="~{fragments/layout :: topbar}"></div>
+     <div class="d-flex">
+       <div th:replace="~{fragments/layout :: menu}"></div>
++
+       <main class="content">
+-        <h3 class="mb-1">Ingreso de materiales contra orden de compra</h3>
+-        <p class="text-muted small mb-3">Registre órdenes de compra con uno o varios materiales de varias categorías, vincule el proveedor registrado y registre los ingresos contra la OC.</p>
+-        <div class="card">
+-          <div class="card-body">
+-            <div id="contenido"></div>
++
++        <!-- ================= VISTA 1: LISTADO DE ÓRDENES ================= -->
++        <section id="vistaLista">
++          <div class="page-header">
++            <div>
++              <h1 class="page-title">Ingreso de materiales</h1>
++              <p class="page-subtitle">Cree órdenes de compra y registre los números de serie de cada unidad que llega al almacén.</p>
++            </div>
++            <button type="button" class="btn btn-primary" id="btnNueva">
++              <i class="bi bi-plus-lg"></i> Nueva orden de compra
++            </button>
+           </div>
+-        </div>
++
++          <div class="card">
++            <div class="card-body">
++              <div class="oc-toolbar">
++                <div class="oc-search">
++                  <i class="bi bi-search"></i>
++                  <input type="search" class="form-control" id="ocBuscar" placeholder="Buscar por código, proveedor o RUC"/>
++                </div>
++                <div class="btn-group" role="group" aria-label="Filtrar por estado" id="ocFiltro">
++                  <button type="button" class="btn btn-outline-primary active" data-f="ABIERTA">Abiertas</button>
++                  <button type="button" class="btn btn-outline-primary" data-f="CERRADA">Cerradas</button>
++                  <button type="button" class="btn btn-outline-primary" data-f="TODAS">Todas</button>
++                </div>
++              </div>
++              <div class="table-responsive">
++                <table class="table align-middle oc-table">
++                  <thead>
++                    <tr>
++                      <th>Orden</th>
++                      <th>Proveedor</th>
++                      <th>Emisión</th>
++                      <th style="min-width:150px">Recepción</th>
++                      <th class="text-end">Total</th>
++                      <th>Estado</th>
++                      <th class="text-end">Acciones</th>
++                    </tr>
++                  </thead>
++                  <tbody id="tablaOcs"></tbody>
++                </table>
++              </div>
++            </div>
++          </div>
++        </section>
++
++        <!-- ================= VISTA 2: FORMULARIO DE ORDEN ================= -->
++        <section id="vistaForm" hidden>
++          <div class="page-header">
++            <div>
++              <button type="button" class="btn btn-link p-0 mb-1 text-decoration-none" id="btnVolver">
++                <i class="bi bi-arrow-left"></i> Volver a las órdenes
++              </button>
++              <h1 class="page-title" id="tituloOrden">Nueva orden de compra</h1>
++              <p class="page-subtitle">Defina el proveedor y los materiales que se han pedido. Los números de serie se asocian después, al recibir la mercadería.</p>
++            </div>
++          </div>
++
++          <div class="card mb-3">
++            <div class="card-header"><span><i class="bi bi-file-earmark-text"></i> Datos de la orden</span></div>
++            <div class="card-body">
++              <div class="row g-3">
++                <div class="col-md-3">
++                  <label class="form-label" for="codigoOrden">Código</label>
++                  <input class="form-control" id="codigoOrden" placeholder="OC-2026-XXX" autocomplete="off"/>
++                </div>
++                <div class="col-md-6">
++                  <label class="form-label">Proveedor registrado</label>
++                  <div id="proveedorHost"></div>
++                  <div class="form-text">¿No encuentra el proveedor? <a href="/empresa/proveedores" target="_blank">Regístrelo aquí</a>.</div>
++                </div>
++                <div class="col-md-3">
++                  <label class="form-label" for="fechaOrden">Fecha de emisión</label>
++                  <input class="form-control" id="fechaOrden" type="date"/>
++                </div>
++              </div>
++            </div>
++          </div>
++
++          <div class="card">
++            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
++              <span><i class="bi bi-boxes"></i> Materiales de la orden
++                <small class="text-muted ms-1">una orden puede incluir varias categorías</small></span>
++              <button type="button" class="btn btn-primary btn-sm" id="btnAddMaterial">
++                <i class="bi bi-plus-lg"></i> Agregar material
++              </button>
++            </div>
++            <div class="card-body p-0">
++              <div class="table-responsive">
++                <table class="table align-middle mb-0 oc-table">
++                  <thead>
++                    <tr>
++                      <th>Material</th>
++                      <th>Categoría</th>
++                      <th class="text-end">Cantidad</th>
++                      <th class="text-end">Precio unit.</th>
++                      <th class="text-end">Subtotal</th>
++                      <th></th>
++                    </tr>
++                  </thead>
++                  <tbody id="lineasOrden"></tbody>
++                </table>
++              </div>
++            </div>
++            <div class="card-footer oc-footer">
++              <div class="oc-total">Total de la orden <strong id="totalOrden">S/ 0.00</strong></div>
++              <div class="d-flex gap-2">
++                <button type="button" class="btn btn-outline-secondary" id="cancelarOrden">Cancelar</button>
++                <button type="button" class="btn btn-primary" id="guardarOrden"><i class="bi bi-check2"></i> Guardar orden</button>
++              </div>
++            </div>
++          </div>
++        </section>
++
+       </main>
+     </div>
+   </div>
+ </div>
+-<div th:replace="~{fragments/layout :: scripts}"></div>
+-<script>
+-(async () => {
+-  try {
+-    const [ordenes, proveedores, materiales] = await Promise.all([
+-      getJson('/api/almacen/ordenes-compra?incluirCerradas=true'),
+-      getJson('/api/empresa?tipo=PROVEEDOR'),
+-      getJson('/api/almacen/materiales')
+-    ]);
+-    const ocs = ordenes.filter(o => o.estado === 'ABIERTA');
+-    const matOpts = materiales.map(m => '<option value="' + m.idMaterial + '">' + esc(m.codigo) + ' · ' + esc(m.nombre) + ' (' + esc(m.categoria||'—') + ')</option>').join('');
+ 
+-  el('contenido').innerHTML =
+-    '<h5>Órdenes de compra</h5>' +
+-    '<button class="btn btn-primary btn-sm mb-2" id="nuevaOrden">Nueva orden</button>' +
+-    '<div class="table-responsive"><table class="table table-sm align-middle">' +
+-      '<thead><tr><th>Código</th><th>Proveedor</th><th>RUC</th><th>Fecha</th><th>Ítems</th><th>Estado</th><th>Acciones</th></tr></thead>' +
+-      '<tbody id="tablaOcs"></tbody></table></div>' +
+-    '<div id="formOrden" class="card p-3 mb-4" style="display:none">' +
+-      '<h6 id="tituloOrden">Nueva orden de compra</h6>' +
+-      '<div class="row g-2">' +
+-        '<div class="col-md-3"><label class="form-label small">Código</label><input class="form-control" id="codigoOrden" placeholder="OC-2026-XXX" required/></div>' +
+-        '<div class="col-md-6"><label class="form-label small">Proveedor (registrado)</label>' + modalSelectorMarkup('proveedorSel', 'Buscar y seleccionar proveedor') + '</div>' +
+-        '<div class="col-md-3"><label class="form-label small">Fecha de emisión</label><input class="form-control" id="fechaOrden" type="date" required/></div>' +
+-      '</div>' +
+-      '<div class="mt-2 small"><a href="/empresa/proveedores" target="_blank">¿No encuentra el proveedor? Regístrelo aquí.</a></div>' +
+-      '<h6 class="mt-3">Materiales de la orden <small class="text-muted">(una OC puede tener varios materiales de varias categorías)</small></h6>' +
+-      '<table class="table table-sm"><thead><tr><th>Material</th><th>Categoría</th><th>Cantidad</th><th>Precio unit.</th><th></th></tr></thead>' +
+-        '<tbody id="itemsOrden"></tbody></table>' +
+-      '<button class="btn btn-secondary btn-sm mb-2" id="addItemOrden">Agregar material</button>' +
+-      '<div><button class="btn btn-primary btn-sm" id="guardarOrden">Guardar orden</button>' +
+-        '<button class="btn btn-secondary btn-sm" id="cancelarOrden" type="button">Cancelar</button></div>' +
+-    '</div>' +
+-    '<hr/>' +
+-    '<div class="mb-3"><label class="form-label">Orden de compra (sólo ABIERTAS)</label>' +
+-      modalSelectorMarkup('idOC', 'Buscar y seleccionar orden de compra') + '</div>' +
+-    '<h6>Ítems recibidos <small class="text-muted">— seleccione el modelo del catálogo y registre un número de serie por cada unidad</small></h6>' +
+-    '<table class="table table-sm"><thead><tr><th>Modelo (catálogo)</th><th>N.° de serie (uno por línea = una unidad)</th><th>Cantidad (sin series)</th><th></th></tr></thead>' +
+-      '<tbody id="items">' + filaIngreso() + '</tbody></table>' +
+-    '<button class="btn btn-secondary btn-sm" id="add">Agregar ítem</button>' +
+-    '<button class="btn btn-primary" id="guardar">Registrar ingreso</button>' +
+-    '<div id="res" class="mt-3"></div>';
++<!-- ================= MODAL: AGREGAR / EDITAR MATERIAL DE LA OC ================= -->
++<div class="modal fade" id="modalItem" tabindex="-1" aria-hidden="true">
++  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
++    <div class="modal-content">
++      <div class="modal-header">
++        <h5 class="modal-title"><i class="bi bi-box-seam"></i> <span id="miTitulo">Agregar material a la orden</span></h5>
++        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
++      </div>
++      <div class="modal-body">
++        <div class="modal-selector-search">
++          <i class="bi bi-search"></i>
++          <input type="search" class="form-control" id="miBuscar" placeholder="Buscar por código, nombre o categoría" autocomplete="off"/>
++        </div>
++        <div class="modal-selector-meta"><span id="miContador"></span><span class="hint">Seleccione el tipo de material</span></div>
++        <div class="mat-list" id="miLista"></div>
++
++        <div class="mat-form" id="miForm">
++          <div class="mat-selected" id="miSel"><i class="bi bi-hand-index"></i> Seleccione un material de la lista</div>
++          <div class="row g-3 mt-0">
++            <div class="col-sm-4">
++              <label class="form-label" for="miCant">Cantidad</label>
++              <input type="number" class="form-control" id="miCant" min="1" step="1" placeholder="0"/>
++            </div>
++            <div class="col-sm-4">
++              <label class="form-label" for="miPrecio">Precio unitario (S/)</label>
++              <input type="number" class="form-control" id="miPrecio" min="0" step="0.01" placeholder="0.00"/>
++            </div>
++            <div class="col-sm-4">
++              <label class="form-label">Subtotal</label>
++              <div class="form-control-plaintext fw-bold" id="miSubtotal">S/ 0.00</div>
++            </div>
++          </div>
++          <div class="text-danger small mt-2" id="miError" hidden></div>
++        </div>
++      </div>
++      <div class="modal-footer">
++        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
++        <button type="button" class="btn btn-primary" id="miGuardar"><i class="bi bi-check2"></i> Agregar a la orden</button>
++      </div>
++    </div>
++  </div>
++</div>
+ 
+-  initModalSelector('idOC', 'orden de compra', ocs.map(function(o){ return {value:o.idOrdenCompra, label:o.codigo + ' - ' + o.proveedor}; }));
+-  initModalSelector('proveedorSel', 'proveedor', proveedores.map(function(p){ return {value:p.idEmpresa, label:p.razonSocial + ' — RUC ' + p.ruc, meta:p.contactoNombre ? ('Contacto: ' + p.contactoNombre) : null}; }));
++<!-- ================= MODAL: REGISTRAR INGRESO / ASOCIAR SERIES ================= -->
++<div class="modal fade" id="modalIngreso" tabindex="-1" aria-hidden="true">
++  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
++    <div class="modal-content">
++      <div class="modal-header">
++        <div>
++          <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Registrar ingreso · <span id="ingOc">OC</span></h5>
++          <div class="text-muted small mt-1" id="ingProv"></div>
++        </div>
++        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
++      </div>
++      <div class="modal-body">
++        <div id="ingVacio" class="empty-state" hidden>
++          <i class="bi bi-inbox"></i>
++          <p class="mb-2">Esta orden no tiene materiales registrados.</p>
++          <button type="button" class="btn btn-outline-primary btn-sm" id="ingEditar">Editar la orden y agregar materiales</button>
++        </div>
+ 
+-  function renderOcs() {
+-    el('tablaOcs').innerHTML = ordenes.map(function(o){
+-      var itemsCell = (o.items && o.items.length)
+-        ? '<button class="btn btn-sm btn-link p-0" onclick="verItems(' + o.idOrdenCompra + ')">' + o.items.length + ' material(es)</button>'
+-        : '<span class="text-muted">0</span>';
+-      var estado = o.estado === 'ABIERTA' ? '<span class="badge bg-success">Abierta</span>' : '<span class="badge bg-secondary">Cerrada</span>';
+-      var acciones = o.estado === 'ABIERTA'
+-        ? '<button class="btn btn-sm btn-outline-primary me-1" onclick="editarOrden(' + o.idOrdenCompra + ')">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="cerrarOrden(' + o.idOrdenCompra + ')">Cerrar</button>'
+-        : '<button class="btn btn-sm btn-outline-success" onclick="reabrirOrden(' + o.idOrdenCompra + ')">Reabrir</button>';
+-      var itemsDetalle = (o.items && o.items.length)
+-        ? '<table class="table table-sm mb-0"><thead><tr><th>Código</th><th>Material</th><th>Categoría</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th></tr></thead><tbody>' +
+-          o.items.map(function(it){
+-            return '<tr><td>' + esc(it.codigoMaterial||'—') + '</td><td>' + esc(it.nombreMaterial||'—') + '</td><td>' + esc(it.categoria||'—') + '</td><td>' + it.cantidad + '</td><td>S/ ' + fmtMonto(it.precioUnitario) + '</td><td>S/ ' + fmtMonto((it.precioUnitario||0)*it.cantidad) + '</td></tr>';
+-          }).join('') + '</tbody></table>'
+-        : '<p class="text-muted mb-0">Sin materiales</p>';
+-      return '<tr>' +
+-        '<td><strong>' + esc(o.codigo) + '</strong></td>' +
+-        '<td>' + esc(o.proveedor) + '</td>' +
+-        '<td>' + esc(o.rucProveedor||'—') + '</td>' +
+-        '<td>' + esc(o.fechaEmision) + '</td>' +
+-        '<td>' + itemsCell + '</td>' +
+-        '<td>' + estado + '</td>' +
+-        '<td>' + acciones + '</td>' +
+-      '</tr>' +
+-      '<tr id="items-' + o.idOrdenCompra + '" style="display:none"><td colspan="7" class="bg-light px-3">' + itemsDetalle + '</td></tr>';
+-    }).join('');
+-  }
+-  renderOcs();
+-  window.verItems = function(id){ var r = el('items-'+id); r.style.display = r.style.display==='none'?'table-row':'none'; };
++        <div class="row g-3" id="ingCuerpo">
++          <!-- Columna izquierda: materiales de la OC -->
++          <div class="col-lg-5">
++            <div class="ing-col-title">Materiales de la orden</div>
++            <div class="ing-items" id="ingItems"></div>
++          </div>
++          <!-- Columna derecha: editor de series -->
++          <div class="col-lg-7">
++            <div class="ing-panel" id="ingPanel"></div>
++          </div>
++        </div>
+ 
+-  // Fila del formulario de INGRESO: selecciona modelo del catálogo + series por unidad
+-  function filaIngreso() {
+-    return '<tr>' +
+-      '<td><select class="form-select form-select-sm matIng"><option value="">— Seleccione modelo —</option>' + matOpts + '</select></td>' +
+-      '<td><textarea class="form-control form-control-sm seriesIng" rows="2" placeholder="SN-001&#10;SN-002&#10;..."></textarea></td>' +
+-      '<td><input type="number" class="form-control form-control-sm canIng" min="1" placeholder="opcional"/></td>' +
+-      '<td><button class="btn btn-sm btn-link text-danger" onclick="this.parentElement.parentElement.remove()">Quitar</button></td>' +
+-    '</tr>';
+-  }
++        <div class="alert alert-danger mt-3 mb-0" id="ingError" hidden></div>
++      </div>
++      <div class="modal-footer justify-content-between">
++        <div class="text-muted small" id="ingResumen">Sin series por registrar</div>
++        <div class="d-flex gap-2">
++          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
++          <button type="button" class="btn btn-primary" id="ingGuardar" disabled>
++            <i class="bi bi-check2-circle"></i> Registrar ingreso
++          </button>
++        </div>
++      </div>
++    </div>
++  </div>
++</div>
+ 
+-  var ordenEditando = null;
+-  var itemN = 0;
+-  function filaItemOrden() {
+-    var id = itemN++;
+-    return '<tr data-item="' + id + '">' +
+-      '<td><select class="form-select form-select-sm matSel"><option value="">— Seleccione —</option>' + matOpts + '</select></td>' +
+-      '<td class="catCell"></td>' +
+-      '<td><input type="number" class="form-control form-control-sm canItem" min="1"/></td>' +
+-      '<td><input type="number" class="form-control form-control-sm preItem" min="0" step="0.01"/></td>' +
+-      '<td><button class="btn btn-sm btn-link text-danger" onclick="this.parentElement.parentElement.remove()">Quitar</button></td>' +
+-    '</tr>';
+-  }
+-  function abrirOrden(orden) {
+-    ordenEditando = orden ? orden.idOrdenCompra : null;
+-    el('tituloOrden').textContent = orden ? 'Editar orden de compra' : 'Nueva orden de compra';
+-    el('codigoOrden').value = orden ? orden.codigo : '';
+-    el('proveedorSel').value = orden && orden.idEmpresa ? orden.idEmpresa : '';
+-    el('proveedorSelDisplay').value = orden ? (orden.proveedor + (orden.rucProveedor ? ' — RUC ' + orden.rucProveedor : '')) : '';
+-    el('fechaOrden').value = orden ? orden.fechaEmision : new Date().toISOString().slice(0, 10);
+-    el('itemsOrden').innerHTML = '';
+-    itemN = 0;
+-    if (orden && orden.items && orden.items.length) {
+-      orden.items.forEach(function(it){
+-        el('itemsOrden').insertAdjacentHTML('beforeend', filaItemOrden());
+-        var last = el('itemsOrden').lastElementChild;
+-        last.querySelector('.matSel').value = it.idMaterial;
+-        last.querySelector('.canItem').value = it.cantidad;
+-        last.querySelector('.preItem').value = it.precioUnitario || '';
+-        last.querySelector('.catCell').textContent = it.categoria || '';
+-      });
+-    } else {
+-      el('itemsOrden').insertAdjacentHTML('beforeend', filaItemOrden());
+-    }
+-    el('formOrden').style.display = 'block';
+-    el('formOrden').scrollIntoView({behavior: 'smooth', block: 'start'});
+-  }
+-  el('nuevaOrden').onclick = function(){ abrirOrden(null); };
+-  el('cancelarOrden').onclick = function(){ el('formOrden').style.display = 'none'; };
+-  el('addItemOrden').onclick = function(){ el('itemsOrden').insertAdjacentHTML('beforeend', filaItemOrden()); };
+-  el('itemsOrden').addEventListener('change', function(e){
+-    if (e.target.classList.contains('matSel')) {
+-      var m = materiales.find(function(x){ return x.idMaterial == e.target.value; });
+-      e.target.closest('tr').querySelector('.catCell').textContent = m ? (m.categoria||'') : '';
+-    }
+-  });
+-  el('guardarOrden').onclick = async function(){
+-    var idEmp = el('proveedorSel').value;
+-    var items = [];
+-    el('itemsOrden').querySelectorAll('tr[data-item]').forEach(function(tr){
+-      var idMat = tr.querySelector('.matSel').value;
+-      var can = tr.querySelector('.canItem').value;
+-      var pre = tr.querySelector('.preItem').value;
+-      if (idMat && can) items.push({idMaterial: parseInt(idMat), cantidad: parseInt(can), precioUnitario: pre ? parseFloat(pre) : null});
+-    });
+-    var body = {
+-      codigo: el('codigoOrden').value.trim(),
+-      idEmpresa: idEmp ? parseInt(idEmp) : null,
+-      fechaEmision: el('fechaOrden').value,
+-      items: items
+-    };
+-    try {
+-      if (ordenEditando === null) await postJson('/api/almacen/ordenes-compra', body);
+-      else await putJson('/api/almacen/ordenes-compra/' + ordenEditando, body);
+-      window.location.reload();
+-    } catch (e) { alert(e.message); }
+-  };
+-  window.editarOrden = function(id){ var orden = ordenes.find(function(o){ return o.idOrdenCompra === id; }); if (orden) abrirOrden(orden); };
+-  window.cerrarOrden = async function(id){
+-    if (!confirm('¿Cerrar esta orden? Ya no se podrá registrar nuevos ingresos asociados.')) return;
+-    try { await api('/api/almacen/ordenes-compra/' + id, {method: 'DELETE'}); window.location.reload(); }
+-    catch (e) { alert(e.message); }
+-  };
+-  window.reabrirOrden = async function(id){
+-    try { await patch('/api/almacen/ordenes-compra/' + id + '/reabrir'); window.location.reload(); }
+-    catch (e) { alert(e.message); }
+-  };
+-  el('add').onclick = function(){
+-    el('items').insertAdjacentHTML('beforeend', filaIngreso());
+-  };
+-  el('guardar').onclick = async function(){
+-    var items = [];
+-    var sinModelo = 0;
+-    document.querySelectorAll('#items tr').forEach(function(tr){
+-      var sel = tr.querySelector('.matIng');
+-      var idMat = sel ? sel.value : '';
+-      var m = idMat ? materiales.find(function(x){ return x.idMaterial == idMat; }) : null;
+-      if (!m) { sinModelo++; return; }
+-      var seriesRaw = (tr.querySelector('.seriesIng').value) || '';
+-      var series = seriesRaw.split('\n').map(function(s){ return s.trim(); }).filter(function(s){ return s.length > 0; });
+-      var can = tr.querySelector('.canIng').value;
+-      if (series.length > 0) items.push({codigo: m.codigo, numeroSeries: series});
+-      else if (can) items.push({codigo: m.codigo, cantidad: parseInt(can)});
+-    });
+-    if (items.length === 0) { alert('Seleccione al menos un modelo y registre su número de serie (o cantidad).'); return; }
+-    try {
+-      var r = await postJson('/api/almacen/ingresos', {idOrdenCompra: parseInt(el('idOC').value), items: items});
+-      el('res').innerHTML = '<div class="alert ' + (r.exito?'alert-success':'alert-warning') + '"><strong>' + esc(r.mensaje) + '</strong><ul class="mb-0 mt-2">' + (r.detalle||[]).map(function(d){return '<li>'+esc(d)+'</li>';}).join('') + '</ul>' + ((r.materialesNoRegistrados||[]).length?'<div class="mt-2">Materiales no registrados: ' + r.materialesNoRegistrados.map(esc).join(', ') + ' (regístrelos en el catálogo).</div>':'') + '</div>';
+-    } catch(e){ el('res').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+-  };
+-  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
+-})();
+-</script>
++<div th:replace="~{fragments/layout :: scripts}"></div>
++<script th:src="@{/js/ingresos.js}"></script>
+ </body></html>
