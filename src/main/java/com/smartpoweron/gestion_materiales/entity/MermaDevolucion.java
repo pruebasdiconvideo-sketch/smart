@@ -23,8 +23,10 @@ public class MermaDevolucion {
     private Integer cantidad;
     private String tipo;
     private String estado;
+    @Builder.Default
     private Boolean anulada = false;
     private String motivoAnulacion;
     private String motivo;
+    @Builder.Default
     private LocalDateTime fecha = LocalDateTime.now();
 }

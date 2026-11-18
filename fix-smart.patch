@@ -1,0 +1,241 @@
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/controller/ProduccionController.java b/src/main/java/com/smartpoweron/gestion_materiales/controller/ProduccionController.java
+deleted file mode 100644
+index 47c66e0..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/controller/ProduccionController.java
++++ /dev/null
+@@ -1,68 +0,0 @@
+-package com.smartpoweron.gestion_materiales.controller;
+-
+-import com.smartpoweron.gestion_materiales.model.SolicitudProduccion;
+-import com.smartpoweron.gestion_materiales.service.MaterialService;
+-import com.smartpoweron.gestion_materiales.service.ProduccionService;
+-import jakarta.servlet.http.HttpServletRequest;
+-import org.springframework.beans.factory.annotation.Autowired;
+-import org.springframework.stereotype.Controller;
+-import org.springframework.ui.Model;
+-import org.springframework.web.bind.annotation.GetMapping;
+-import org.springframework.web.bind.annotation.PostMapping;
+-import org.springframework.web.bind.annotation.RequestParam;
+-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+-
+-@Controller
+-public class ProduccionController {
+-
+-    @Autowired
+-    private ProduccionService produccionService;
+-
+-    @Autowired
+-    private MaterialService materialService;
+-
+-    @GetMapping("/produccion/ver")
+-    public String consultarProyectos(Model model) {
+-        model.addAttribute("solicitudes", produccionService.listarSolicitudes());
+-        model.addAttribute("materiales", materialService.listarMateriales());
+-        model.addAttribute("nuevaSolicitud", new SolicitudProduccion());
+-        return "produccion/proyectos";
+-    }
+-
+-    @PostMapping("/produccion/guardar")
+-    public String guardarSolicitud(HttpServletRequest request, RedirectAttributes redirectAttributes) {
+-        String codigoProyecto = request.getParameter("codigoProyecto");
+-        String[] idsMaterialesArr = request.getParameterValues("idsMateriales");
+-        String[] cantidadesArr = request.getParameterValues("cantidades");
+-
+-        System.out.println("--- INTENTO DE REGISTRO ---");
+-        System.out.println("Proyecto: " + codigoProyecto);
+-        if (idsMaterialesArr != null) {
+-            for (String id : idsMaterialesArr) {
+-                System.out.println("ID Material recibido: " + id);
+-            }
+-        }
+-
+-        try {
+-            produccionService.registrarSolicitudConArreglos(codigoProyecto, idsMaterialesArr, cantidadesArr);
+-            redirectAttributes.addFlashAttribute("successMessage", "¡Solicitud de producción registrada con éxito!");
+-        } catch (Exception e) {
+-            System.err.println("ERROR AL GUARDAR SOLICITUD:");
+-            e.printStackTrace();
+-            redirectAttributes.addFlashAttribute("errorMessage", "Error al guardar: " + e.getMessage());
+-        }
+-
+-        return "redirect:/produccion/ver";
+-    }
+-
+-    @PostMapping("/produccion/aprobar")
+-    public String aprobarSolicitud(@RequestParam Long idSolicitud, RedirectAttributes redirectAttributes) {
+-        try {
+-            produccionService.aprobarSolicitudYDescontarStock(idSolicitud);
+-            redirectAttributes.addFlashAttribute("successMessage", "¡Solicitud aprobada y stock descontado!");
+-        } catch (RuntimeException e) {
+-            redirectAttributes.addFlashAttribute("errorMessage", "Error al aprobar: " + e.getMessage());
+-        }
+-        return "redirect:/produccion/ver";
+-    }
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Entrega.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Entrega.java
+index a5d986d..1a6d728 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Entrega.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Entrega.java
+@@ -23,5 +23,6 @@ public class Entrega {
+     private LocalDateTime fechaConfirmacion;
+ 
+     @Column(name = "confirmado")
++    @Builder.Default
+     private Boolean confirmado = Boolean.TRUE;
+ }
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/MaterialInstancia.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/MaterialInstancia.java
+index 1005228..2466942 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/MaterialInstancia.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/MaterialInstancia.java
+@@ -40,5 +40,6 @@ public class MaterialInstancia {
+     private Long idUsuario;
+ 
+     @Column(length = 20)
++    @Builder.Default
+     private String estado = "EN_ALMACEN"; // EN_ALMACEN | SALIDA | MERMADO
+ }
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java
+index 41777f4..c6aa6bc 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/MermaDevolucion.java
+@@ -23,8 +23,10 @@ public class MermaDevolucion {
+     private Integer cantidad;
+     private String tipo;
+     private String estado;
++    @Builder.Default
+     private Boolean anulada = false;
+     private String motivoAnulacion;
+     private String motivo;
++    @Builder.Default
+     private LocalDateTime fecha = LocalDateTime.now();
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/entity/Solicitud.java b/src/main/java/com/smartpoweron/gestion_materiales/entity/Solicitud.java
+index 1ea3f4e..30190e4 100644
+--- a/src/main/java/com/smartpoweron/gestion_materiales/entity/Solicitud.java
++++ b/src/main/java/com/smartpoweron/gestion_materiales/entity/Solicitud.java
+@@ -27,9 +27,11 @@ public class Solicitud {
+     private LocalDateTime fechaSolicitud;
+ 
+     @Column(name = "costo_total", precision = 12, scale = 2)
++    @Builder.Default
+     private BigDecimal costoTotal = BigDecimal.ZERO;
+ 
+     @Column(name = "estado", length = 30)
++    @Builder.Default
+     private String estado = "BORRADOR";
+ 
+     @Column(name = "anulada", nullable = false)
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/model/DetalleSolicitud.java b/src/main/java/com/smartpoweron/gestion_materiales/model/DetalleSolicitud.java
+deleted file mode 100644
+index 2b4c198..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/model/DetalleSolicitud.java
++++ /dev/null
+@@ -1,40 +0,0 @@
+-package com.smartpoweron.gestion_materiales.model;
+-
+-import com.smartpoweron.gestion_materiales.entity.Material;
+-import jakarta.persistence.*;
+-
+-@Entity(name = "ProduccionDetalleSolicitud")
+-@Table(name = "detalle_solicitud")
+-public class DetalleSolicitud {
+-
+-    @Id
+-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+-    @Column(name = "id_detalle")
+-    private Long idDetalle;
+-
+-    @ManyToOne
+-    @JoinColumn(name = "id_solicitud", nullable = false)
+-    private SolicitudProduccion solicitudProduccion;
+-
+-    @ManyToOne
+-    @JoinColumn(name = "id_material", nullable = false)
+-    private Material material;
+-
+-    @Column(name = "cantidad_requerida", nullable = false)
+-    private Integer cantidadRequerida;
+-
+-    public DetalleSolicitud() {}
+-
+-    // Getters y Setters
+-    public Long getIdDetalle() { return idDetalle; }
+-    public void setIdDetalle(Long idDetalle) { this.idDetalle = idDetalle; }
+-
+-    public SolicitudProduccion getSolicitudProduccion() { return solicitudProduccion; }
+-    public void setSolicitudProduccion(SolicitudProduccion solicitudProduccion) { this.solicitudProduccion = solicitudProduccion; }
+-
+-    public Material getMaterial() { return material; }
+-    public void setMaterial(Material material) { this.material = material; }
+-
+-    public Integer getCantidadRequerida() { return cantidadRequerida; }
+-    public void setCantidadRequerida(Integer cantidadRequerida) { this.cantidadRequerida = cantidadRequerida; }
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/model/SolicitudProduccion.java b/src/main/java/com/smartpoweron/gestion_materiales/model/SolicitudProduccion.java
+deleted file mode 100644
+index 9d57aa9..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/model/SolicitudProduccion.java
++++ /dev/null
+@@ -1,13 +0,0 @@
+-package com.smartpoweron.gestion_materiales.model;
+-
+-import lombok.Data;
+-import java.time.LocalDate;
+-
+-@Data
+-public class SolicitudProduccion {
+-    private Long id;
+-    private String codigo;
+-    private String descripcion;
+-    private LocalDate fechaSolicitud;
+-    private String estado; // PENDIENTE, APROBADA, RECHAZADA
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/repository/SolicitudProduccionRepository.java b/src/main/java/com/smartpoweron/gestion_materiales/repository/SolicitudProduccionRepository.java
+deleted file mode 100644
+index 728f18c..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/repository/SolicitudProduccionRepository.java
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package com.smartpoweron.gestion_materiales.repository;
+-
+-import com.smartpoweron.gestion_materiales.model.SolicitudProduccion;
+-import org.springframework.data.jpa.repository.JpaRepository;
+-import org.springframework.stereotype.Repository;
+-
+-import java.util.List;
+-
+-@Repository
+-public interface SolicitudProduccionRepository extends JpaRepository<SolicitudProduccion, Long> {
+-    List<SolicitudProduccion> findByCodigoProyecto(String codigoProyecto);
+-}
+\ No newline at end of file
+diff --git a/src/main/java/com/smartpoweron/gestion_materiales/service/ProduccionService.java b/src/main/java/com/smartpoweron/gestion_materiales/service/ProduccionService.java
+deleted file mode 100644
+index 7d9b091..0000000
+--- a/src/main/java/com/smartpoweron/gestion_materiales/service/ProduccionService.java
++++ /dev/null
+@@ -1,19 +0,0 @@
+-package com.smartpoweron.gestion_materiales.service;
+-
+-import com.smartpoweron.gestion_materiales.model.SolicitudProduccion;
+-import org.springframework.stereotype.Service;
+-
+-import java.util.List;
+-
+-@Service
+-public class ProduccionService {
+-
+-    // Implementación básica (puedes ampliarla según tus necesidades)
+-    public List<SolicitudProduccion> listarSolicitudes() {
+-        return List.of(); // Retorna una lista vacía por ahora
+-    }
+-
+-    public SolicitudProduccion crearSolicitud(SolicitudProduccion solicitud) {
+-        return solicitud; // Lógica simple, ajusta según corresponda
+-    }
+-}
+\ No newline at end of file

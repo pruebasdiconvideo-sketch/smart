@@ -164,6 +164,12 @@ public class Dtos {
         private String codigoMaterial;
         private String nombreMaterial;
         private String modelo; // <-- Añadido (error MaterialService:271)
+        private String marca;
+        private String categoria;
+        private Long idOrdenCompra;
+        private String codigoOC;
+        private String fechaIngreso;
+        private String estado;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -215,6 +221,7 @@ public class Dtos {
         private String codigoMaterial;
         private String nombreMaterial;
         private String categoria; // <-- Añadido (error MaterialService:441)
+        private String unidadMedida;
         private Integer cantidad;
         private BigDecimal precioUnitario;
     }
@@ -340,6 +347,12 @@ public class Dtos {
         private String normaReferencia;
         private String estado;
         private Boolean anulada;
+        private String resultado;
+        private String observacion;
+        private String inspector;
+        private String tecnicoExterno;
+        private LocalDateTime fechaPrueba;
+        private String motivoAnulacion;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -419,6 +432,7 @@ public class Dtos {
         private Boolean anulado;
         private String motivoAnulacion;
         private LocalDateTime fechaDespacho; // <-- Añadido (error DespachoService:435)
+        private List<ItemDespachoDto> items;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -454,6 +468,7 @@ public class Dtos {
         private String codigoDigitado;
         private String codigoEsperado; // <-- Añadido (error DespachoService:423)
         private Integer cantidad;
+        private Integer cantidadEntregada;
     }
 
     // --- Mermas y Devoluciones ---
@@ -496,6 +511,12 @@ public class Dtos {
         private String tipo;
         private Integer cantidad;
         private String motivo; // <-- Añadido (error MermaService:261)
+        private String estado;
+        private Boolean anulada;
+        private String motivoAnulacion;
+        private String registra;
+        private String validador;
+        private LocalDateTime fecha;
     }
 
     // --- Trazabilidad ---
@@ -508,5 +529,8 @@ public class Dtos {
         private String accion;
         private Integer cantidad;
         private String usuario; // <-- Añadido (error TrazabilidadService:84)
+        private String codigoProyecto;
+        private String codigoOrdenCompra;
+        private LocalDateTime fechaMovimiento;
     }
 }

@@ -27,9 +27,11 @@ public class Solicitud {
     private LocalDateTime fechaSolicitud;
 
     @Column(name = "costo_total", precision = 12, scale = 2)
+    @Builder.Default
     private BigDecimal costoTotal = BigDecimal.ZERO;
 
     @Column(name = "estado", length = 30)
+    @Builder.Default
     private String estado = "BORRADOR";
 
     @Column(name = "anulada", nullable = false)

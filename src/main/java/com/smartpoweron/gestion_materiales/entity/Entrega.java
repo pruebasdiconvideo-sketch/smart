@@ -23,5 +23,6 @@ public class Entrega {
     private LocalDateTime fechaConfirmacion;
 
     @Column(name = "confirmado")
+    @Builder.Default
     private Boolean confirmado = Boolean.TRUE;
 }

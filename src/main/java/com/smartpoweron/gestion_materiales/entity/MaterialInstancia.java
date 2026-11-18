@@ -40,5 +40,6 @@ public class MaterialInstancia {
     private Long idUsuario;
 
     @Column(length = 20)
+    @Builder.Default
     private String estado = "EN_ALMACEN"; // EN_ALMACEN | SALIDA | MERMADO
 }
