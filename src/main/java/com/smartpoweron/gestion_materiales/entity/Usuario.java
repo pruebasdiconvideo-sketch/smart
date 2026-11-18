@@ -1,32 +1,24 @@
 package com.smartpoweron.gestion_materiales.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Data;
+import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "usuario")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Table(name = "usuarios")
+@Data
 public class Usuario {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_usuario")
     private Long idUsuario;
 
-    @Column(name = "id_rol", nullable = false)
-    private Long idRol;
+    @Column(unique = true)
+    private String username;
 
-    @Column(name = "nombre_completo", nullable = false, length = 150)
-    private String nombreCompleto;
-
-    @Column(name = "correo", unique = true, nullable = false, length = 150)
-    private String correo;
-
-    @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
-
-    @Column(name = "activo")
-    private Boolean activo = Boolean.TRUE;
-
-    @Column(name = "ultimo_acceso")
-    private java.time.LocalDateTime ultimoAcceso;
+    private String nombreCompleto;
+    private String correo;
+    private Long idRol;
+    private Boolean activo;
+    private LocalDateTime ultimoAcceso;
 }

@@ -1,48 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
+    
+    <!-- ✅ Spring Boot actualizado a una versión compatible con JDK 25 -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.5</version>
-        <relativePath/>
+        <version>3.5.7</version> 
+        <relativePath/> 
     </parent>
 
     <groupId>com.smartpoweron</groupId>
     <artifactId>gestion-materiales</artifactId>
-    <version>1.0.0</version>
-    <name>smart-power-on</name>
-    <description>Sistema de Gestión de Procesos para Smart Power On S.A.C. (Informe Cap. 4 - Anexo B)</description>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>gestion-materiales</name>
 
     <properties>
-        <java.version>21</java.version>
+        <!-- ✅ Se alinea con el JDK 25 que tienes instalado -->
+        <java.version>25</java.version>
+        <!-- ✅ Lombok 1.18.48 soporta JDK 25 -->
+        <lombok.version>1.18.48</lombok.version>
         <jjwt.version>0.11.5</jjwt.version>
-        <!-- Lombok >= 1.18.40 es requerido para JDK 25 (OpenJDK 25.0.1).
-             Spring Boot 3.2.5 trae 1.18.32, que no soporta JDK 25. -->
-        <lombok.version>1.18.42</lombok.version>
     </properties>
 
     <dependencies>
-        <!-- Web + REST -->
+        <!-- Dependencias de Spring Boot (sin cambios) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-
-        <!-- Thymeleaf (vistas V01-V16) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.thymeleaf.extras</groupId>
-            <artifactId>thymeleaf-extras-springsecurity6</artifactId>
-        </dependency>
-
-        <!-- JPA + MySQL (producción) + H2 (pruebas) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -53,19 +45,12 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-
-        <!-- Seguridad + JWT -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -84,51 +69,29 @@
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
-
-        <!-- PDF del certificado de conformidad (RF28) -->
         <dependency>
             <groupId>com.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>
             <version>1.0.10</version>
         </dependency>
 
-        <!-- Lombok -->
+        <!-- Lombok con versión compatible con JDK 25 -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <optional>true</optional>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
         </dependency>
 
-        <!-- Pruebas -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <!-- Compilador con Lombok como annotation processor explícito.
-                 Necesario para JDK 25 (la herencia automática falla con versiones nuevas). -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
@@ -139,6 +102,22 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <!-- ✅ Configuración del compilador SIN los parámetros problemáticos -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                   
                 </configuration>
             </plugin>
         </plugins>
