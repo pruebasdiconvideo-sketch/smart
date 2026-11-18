@@ -1,4 +1,5 @@
 package com.smartpoweron.gestion_materiales.service;
+
 import com.smartpoweron.gestion_materiales.repository.ProyectoRepository;
 import com.smartpoweron.gestion_materiales.dto.Dtos;
 import com.smartpoweron.gestion_materiales.entity.*;
@@ -14,15 +15,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Servicio de solicitudes con BOM y su ciclo de estados (RF13 a RF18, §7.2 - M2).
+ * Servicio de solicitudes con BOM y su ciclo de estados (RF13 a RF18, §7.2 -
+ * M2).
  *
  * Reglas aplicadas:
- *   P2-RN01 / RF14: cada componente debe existir en el catálogo y cantidad > 0.
- *   R-INV-06 / RF15: el costo total = Σ cantidad × precio unitario; si supera el
- *                    presupuesto del proyecto → estado RETENIDA.
- *   RF16: sólo el ADMIN aprueba o rechaza (lo refuerza el SecurityConfig).
- *   P2-RN03 / RF17: sólo pasa a LISTA_DESPACHO si todas las líneas tienen stock.
- *   RF18: si falta stock, se genera el listado de faltantes.
+ * P2-RN01 / RF14: cada componente debe existir en el catálogo y cantidad > 0.
+ * R-INV-06 / RF15: el costo total = Σ cantidad × precio unitario; si supera el
+ * presupuesto del proyecto → estado RETENIDA.
+ * RF16: sólo el ADMIN aprueba o rechaza (lo refuerza el SecurityConfig).
+ * P2-RN03 / RF17: sólo pasa a LISTA_DESPACHO si todas las líneas tienen stock.
+ * RF18: si falta stock, se genera el listado de faltantes.
  */
 @Service
 public class SolicitudService {
@@ -38,14 +40,14 @@ public class SolicitudService {
     private final TrazabilidadService trazabilidadService;
 
     public SolicitudService(SolicitudRepository solicitudRepo,
-                            DetalleSolicitudRepository detalleRepo,
-                            MaterialRepository materialRepo,
-                            ProyectoRepository proyectoRepo,
-                            UsuarioRepository usuarioRepo,
-                            DespachoRepository despachoRepo,
-                            DetalleDespachoRepository detalleDespachoRepo,
-                            SecurityUtil securityUtil,
-                            TrazabilidadService trazabilidadService) {
+            DetalleSolicitudRepository detalleRepo,
+            MaterialRepository materialRepo,
+            ProyectoRepository proyectoRepo,
+            UsuarioRepository usuarioRepo,
+            DespachoRepository despachoRepo,
+            DetalleDespachoRepository detalleDespachoRepo,
+            SecurityUtil securityUtil,
+            TrazabilidadService trazabilidadService) {
         this.solicitudRepo = solicitudRepo;
         this.detalleRepo = detalleRepo;
         this.materialRepo = materialRepo;
@@ -61,8 +63,8 @@ public class SolicitudService {
     @Transactional
     public Dtos.SolicitudDto registrarConBom(Dtos.SolicitudCreate req) {
         Usuario solicitante = securityUtil.usuarioOExcepcion();
-        Proyecto p = proyectoRepo.findById(req.getIdProyecto()).orElseThrow(() ->
-                new ReglaNegocioException("El proyecto no existe."));
+        Proyecto p = proyectoRepo.findById(req.getIdProyecto())
+                .orElseThrow(() -> new ReglaNegocioException("El proyecto no existe."));
         if ("ANULADO".equals(p.getEstado())) {
             throw new ReglaNegocioException("No se pueden registrar solicitudes para un proyecto anulado.");
         }
@@ -130,13 +132,14 @@ public class SolicitudService {
 
     @Transactional
     public Dtos.SolicitudDto actualizar(Long id, Dtos.SolicitudCreate req) {
-        Solicitud solicitud = solicitudRepo.findById(id).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud solicitud = solicitudRepo.findById(id)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         if (Boolean.TRUE.equals(solicitud.getAnulada())) {
             throw new ReglaNegocioException("No se puede editar una solicitud anulada.");
         }
         if (!List.of("BORRADOR", "RETENIDA", "LISTA_DESPACHO", "RECHAZADA").contains(solicitud.getEstado())) {
-            throw new ReglaNegocioException("No se puede editar una solicitud en estado " + solicitud.getEstado() + ".");
+            throw new ReglaNegocioException(
+                    "No se puede editar una solicitud en estado " + solicitud.getEstado() + ".");
         }
         if (!despachoRepo.findByIdSolicitud(id).isEmpty()) {
             throw new ReglaNegocioException("No se puede editar una solicitud que ya tiene despachos registrados.");
@@ -144,8 +147,8 @@ public class SolicitudService {
         if (req.getBom() == null || req.getBom().isEmpty()) {
             throw new ReglaNegocioException("La solicitud debe contener al menos un material.");
         }
-        Proyecto proyecto = proyectoRepo.findById(req.getIdProyecto()).orElseThrow(() ->
-                new ReglaNegocioException("El proyecto no existe."));
+        Proyecto proyecto = proyectoRepo.findById(req.getIdProyecto())
+                .orElseThrow(() -> new ReglaNegocioException("El proyecto no existe."));
         if ("ANULADO".equals(proyecto.getEstado())) {
             throw new ReglaNegocioException("No se pueden registrar solicitudes para un proyecto anulado.");
         }
@@ -179,7 +182,7 @@ public class SolicitudService {
         solicitud.setIdProyecto(proyecto.getIdProyecto());
         solicitud.setCostoTotal(costoTotal);
         solicitud.setIdUsuarioAprobador(null);
-        solicitud.setEstado(costoTotal.compareTo(proyecto.getPresupuesto()) > 0 ? "RETENIDA" : "BORRADOR");
+        solicitud.setEstado(costoTotal.compareTo(proyecto.getPresupuesto()) > 0.0 ? "RETENIDA" : "BORRADOR");
         solicitud = solicitudRepo.save(solicitud);
         for (DetalleSolicitud linea : lineas) {
             linea.setIdSolicitud(solicitud.getIdSolicitud());
@@ -193,8 +196,8 @@ public class SolicitudService {
 
     @Transactional
     public Dtos.SolicitudDto anular(Long id, Dtos.SolicitudAnulacionRequest req) {
-        Solicitud solicitud = solicitudRepo.findById(id).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud solicitud = solicitudRepo.findById(id)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         if (Boolean.TRUE.equals(solicitud.getAnulada())) {
             throw new ReglaNegocioException("La solicitud ya está anulada.");
         }
@@ -205,12 +208,14 @@ public class SolicitudService {
             }
             if ("CONFIRMADO".equals(despacho.getEstado())) {
                 for (DetalleDespacho detalle : detalleDespachoRepo.findByIdDespacho(despacho.getIdDespacho())) {
-                    Material material = materialRepo.findById(detalle.getIdMaterial()).orElseThrow(() ->
-                            new ReglaNegocioException("No se encontró un material del despacho para compensarlo."));
-                    DetalleSolicitud linea = detalleRepo.findById(detalle.getIdDetalleSolicitud()).orElseThrow(() ->
-                            new ReglaNegocioException("No se encontró una línea de solicitud para compensarla."));
+                    Material material = materialRepo.findById(detalle.getIdMaterial())
+                            .orElseThrow(() -> new ReglaNegocioException(
+                                    "No se encontró un material del despacho para compensarlo."));
+                    DetalleSolicitud linea = detalleRepo.findById(detalle.getIdDetalleSolicitud()).orElseThrow(
+                            () -> new ReglaNegocioException("No se encontró una línea de solicitud para compensarla."));
                     if (linea.getCantidadDespachada() < detalle.getCantidadEntregada()) {
-                        throw new ReglaNegocioException("La cantidad despachada no coincide con el historial; no se puede anular.");
+                        throw new ReglaNegocioException(
+                                "La cantidad despachada no coincide con el historial; no se puede anular.");
                     }
                     material.setStockActual(material.getStockActual() + detalle.getCantidadEntregada());
                     linea.setCantidadDespachada(linea.getCantidadDespachada() - detalle.getCantidadEntregada());
@@ -242,8 +247,8 @@ public class SolicitudService {
     // ===== RF16 - aprobar solicitud retenida =====
     @Transactional
     public Dtos.SolicitudDto aprobar(Long id, Dtos.AprobacionRequest req) {
-        Solicitud s = solicitudRepo.findById(id).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud s = solicitudRepo.findById(id)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         if (Boolean.TRUE.equals(s.getAnulada())) {
             throw new ReglaNegocioException("La solicitud está anulada.");
         }
@@ -252,7 +257,7 @@ public class SolicitudService {
         }
         Usuario admin = securityUtil.usuarioOExcepcion();
         s.setIdUsuarioAprobador(admin.getIdUsuario());
-        s.setEstado("BORRADOR");  // aprobada: continúa al verificar stock
+        s.setEstado("BORRADOR"); // aprobada: continúa al verificar stock
         solicitudRepo.save(s);
         verificarStockInterno(s);
         return toDto(s);
@@ -261,8 +266,8 @@ public class SolicitudService {
     // ===== RF16 - rechazar solicitud retenida =====
     @Transactional
     public Dtos.SolicitudDto rechazar(Long id, Dtos.AprobacionRequest req) {
-        Solicitud s = solicitudRepo.findById(id).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud s = solicitudRepo.findById(id)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         if (Boolean.TRUE.equals(s.getAnulada())) {
             throw new ReglaNegocioException("La solicitud está anulada.");
         }
@@ -276,11 +281,12 @@ public class SolicitudService {
         return toDto(s);
     }
 
-    // ===== RF17, RF18 - verificar stock y mover a LISTA_DESPACHO o listar faltantes =====
+    // ===== RF17, RF18 - verificar stock y mover a LISTA_DESPACHO o listar
+    // faltantes =====
     @Transactional
     public Dtos.SolicitudDto verificarStock(Long id) {
-        Solicitud s = solicitudRepo.findById(id).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud s = solicitudRepo.findById(id)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         if (Boolean.TRUE.equals(s.getAnulada())) {
             throw new ReglaNegocioException("La solicitud está anulada.");
         }
@@ -293,8 +299,8 @@ public class SolicitudService {
 
     @Transactional
     public void recalcularEstadoDespuesDeCompensacion(Long idSolicitud) {
-        Solicitud solicitud = solicitudRepo.findById(idSolicitud).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud solicitud = solicitudRepo.findById(idSolicitud)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         if (!Boolean.TRUE.equals(solicitud.getAnulada())) {
             boolean completa = detalleRepo.findByIdSolicitud(idSolicitud).stream()
                     .allMatch(linea -> linea.getCantidadDespachada() >= linea.getCantidadSolicitada());
@@ -312,7 +318,10 @@ public class SolicitudService {
         boolean todoConStock = true;
         for (DetalleSolicitud ds : lineas) {
             Material m = materialRepo.findById(ds.getIdMaterial()).orElse(null);
-            if (m == null) { todoConStock = false; break; }
+            if (m == null) {
+                todoConStock = false;
+                break;
+            }
             int saldo = ds.getCantidadSolicitada() - ds.getCantidadDespachada();
             if (saldo > 0 && m.getStockActual() < saldo) {
                 todoConStock = false;
@@ -327,13 +336,14 @@ public class SolicitudService {
     // ===== RF18 - listar faltantes =====
     @Transactional(readOnly = true)
     public List<Dtos.FaltanteDto> listarFaltantes(Long id) {
-        Solicitud s = solicitudRepo.findById(id).orElseThrow(() ->
-                new ReglaNegocioException("La solicitud no existe."));
+        Solicitud s = solicitudRepo.findById(id)
+                .orElseThrow(() -> new ReglaNegocioException("La solicitud no existe."));
         List<DetalleSolicitud> lineas = detalleRepo.findByIdSolicitud(s.getIdSolicitud());
         List<Dtos.FaltanteDto> faltantes = new ArrayList<>();
         for (DetalleSolicitud ds : lineas) {
             Material m = materialRepo.findById(ds.getIdMaterial()).orElse(null);
-            if (m == null) continue;
+            if (m == null)
+                continue;
             int saldo = ds.getCantidadSolicitada() - ds.getCantidadDespachada();
             if (saldo > 0 && m.getStockActual() < saldo) {
                 faltantes.add(Dtos.FaltanteDto.builder()

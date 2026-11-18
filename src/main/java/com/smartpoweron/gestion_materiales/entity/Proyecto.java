@@ -2,6 +2,7 @@ package com.smartpoweron.gestion_materiales.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -19,6 +20,6 @@ public class Proyecto {
     private String cliente;
     private Long idEmpresa;
     private LocalDate fechaInicio;
-    private Double presupuesto; // O BigDecimal si prefieres, pero revisa el servicio
+    private BigDecimal presupuesto;   // ← BigDecimal
     private String estado;
 }
