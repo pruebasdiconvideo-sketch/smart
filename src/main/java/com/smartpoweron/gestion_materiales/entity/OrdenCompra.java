@@ -19,6 +19,9 @@ public class OrdenCompra {
     @Column(name = "proveedor", nullable = false, length = 150)
     private String proveedor;
 
+    @Column(name = "id_empresa")
+    private Long idEmpresa;
+
     @Column(name = "fecha_emision", nullable = false)
     private LocalDate fechaEmision;
 

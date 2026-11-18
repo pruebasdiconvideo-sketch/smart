@@ -9,7 +9,7 @@
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
         <h3 class="mb-1">Trazabilidad de materiales</h3>
-        <p class="text-muted small mb-3">P5-T09 · RF36</p>
+        <p class="text-muted small mb-3">Consulte el historial completo de movimientos de cada material: quién lo movió, cuándo, hacia qué proyecto y contra qué orden de compra.</p>
         <div class="card">
           <div class="card-body">
             <div id="contenido"></div>
@@ -23,24 +23,91 @@
 <script>
 (async () => {
   try {
-    const datos = await getJson('/api/almacen/materiales');
+    const materiales = await getJson('/api/almacen/materiales');
     el('contenido').innerHTML = `
-    <form class="row g-2 mb-3">
-      <div class="col-md-6"><input id="codigo" class="form-control" placeholder="Código del material (ej. SIPROTEC-7SJ62)"/></div>
-      <div class="col-md-3"><button class="btn btn-primary" id="buscar">Consultar trazabilidad</button></div>
+    <form class="row g-2 mb-3" id="formBusq">
+      <div class="col-md-7"><label class="form-label small text-muted">Material</label>
+        <div class="input-group"><span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+        <input id="codigo" class="form-control" list="listaMats" placeholder="Seleccione o escriba el código del material (ej. SIPROTEC-7SJ62)"/></div>
+        <datalist id="listaMats">${materiales.map(m=>`<option value="${esc(m.codigo)}">${esc(m.nombre)}</option>`).join('')}</datalist>
+      </div>
+      <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" id="buscar"><i class="bi bi-search"></i> Consultar trazabilidad</button></div>
     </form>
-    <div id="result"></div>`;
-  el('buscar').onclick = async () => {
-    const cod = el('codigo').value.trim();
-    if (!cod) return;
-    try {
-      const list = await getJson('/api/trazabilidad/materiales/'+encodeURIComponent(cod));
-      el('result').innerHTML = list.length ? `
-        <table class="table table-sm"><thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Usuario</th><th>Proyecto</th><th>OC</th></tr></thead>
-        <tbody>${list.map(t=>`<tr><td>${fmtFecha(t.fechaMovimiento)}</td><td>${esc(t.tipoMovimiento)}</td><td>${t.cantidad}</td><td>${esc(t.usuario)}</td><td>${esc(t.codigoProyecto||'')}</td><td>${esc(t.codigoOrdenCompra||'')}</td></tr>`).join('')}</tbody></table>`
-        : '<p class="text-muted">Sin movimientos registrados para ese material.</p>';
-    } catch(e){ el('result').innerHTML = '<div class="alert alert-danger">'+e.message+'</div>'; }
-  };
+    <div id="result"></div>
+    <hr class="my-4"/>
+    <h5 class="mb-2"><i class="bi bi-upc-scan"></i> Buscar por número de serie</h5>
+    <p class="text-muted small mb-2">Trazabilidad individual de una unidad (informe): modelo, marca, OC de origen, fecha de ingreso y estado.</p>
+    <form class="row g-2 mb-3" id="formSerie">
+      <div class="col-md-7"><div class="input-group"><span class="input-group-text">N.° de serie</span>
+        <input id="serieBusq" class="form-control" placeholder="Ej. SN-001"/></div></div>
+      <div class="col-md-3 d-flex align-items-end"><button class="btn btn-outline-primary w-100" id="buscarSerie" type="submit"><i class="bi bi-search"></i> Buscar unidad</button></div>
+    </form>
+    <div id="resultSerie"></div>`;
+    el('buscar').onclick = async (ev) => {
+      ev && ev.preventDefault();
+      const cod = el('codigo').value.trim();
+      if (!cod) { el('result').innerHTML = '<div class="alert alert-warning">Ingrese un código de material.</div>'; return; }
+      const mat = materiales.find(m => m.codigo === cod);
+      try {
+        const list = await getJson('/api/trazabilidad/materiales/'+encodeURIComponent(cod));
+        const entradas = list.filter(t=>t.tipoMovimiento==='ENTRADA').reduce((s,t)=>s+t.cantidad,0);
+        const salidas = list.filter(t=>t.tipoMovimiento==='SALIDA').reduce((s,t)=>s+t.cantidad,0);
+        const devol = list.filter(t=>t.tipoMovimiento==='DEVOLUCION').reduce((s,t)=>s+t.cantidad,0);
+        const mermas = list.filter(t=>t.tipoMovimiento==='MERMA').reduce((s,t)=>s+t.cantidad,0);
+        const stockCalc = entradas - salidas + devol - mermas;
+        const badge = tipo => {
+          const m = {'ENTRADA':'bg-success','SALIDA':'bg-danger','DEVOLUCION':'bg-primary','MERMA':'bg-warning text-dark'}[tipo]||'bg-secondary';
+          return `<span class="badge ${m}">${esc(tipo)}</span>`;
+        };
+        const fila = t => `<tr>
+          <td>${fmtFecha(t.fechaMovimiento)}</td>
+          <td>${badge(t.tipoMovimiento)}</td>
+          <td class="${t.tipoMovimiento==='ENTRADA'||t.tipoMovimiento==='DEVOLUCION'?'text-success fw-bold':(t.tipoMovimiento==='SALIDA'||t.tipoMovimiento==='MERMA'?'text-danger fw-bold':'')}">${t.tipoMovimiento==='ENTRADA'||t.tipoMovimiento==='DEVOLUCION'?'+':'-'}${t.cantidad}</td>
+          <td>${esc(t.usuario||'—')}</td>
+          <td>${esc(t.codigoProyecto||'—')}</td>
+          <td>${esc(t.codigoOrdenCompra||'—')}</td>
+        </tr>`;
+        el('result').innerHTML = `
+          ${mat ? `<div class="mb-3"><h6 class="mb-1">${esc(mat.nombre)}</h6>
+            <div class="text-muted small">Código: <strong>${esc(mat.codigo)}</strong> · Categoría: ${esc(mat.categoria||'—')} · Stock actual: <strong class="${mat.enAlerta?'text-danger':''}">${mat.stockActual}</strong></div></div>` : ''}
+          <div class="row g-2 mb-3">
+            <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Total entradas</div><div class="stat-value text-success">+${entradas}</div></div></div>
+            <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Total salidas</div><div class="stat-value text-danger">-${salidas}</div></div></div>
+            <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Devoluciones</div><div class="stat-value text-primary">+${devol}</div></div></div>
+            <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Mermas</div><div class="stat-value text-warning">-${mermas}</div></div></div>
+          </div>
+          <div class="alert alert-info"><strong>Stock calculado por movimientos:</strong> ${stockCalc} unidades (entradas − salidas + devoluciones − mermas).</div>
+          <div class="table-responsive"><table class="table table-sm align-middle">
+            <thead><tr><th>Fecha y hora</th><th>Movimiento</th><th>Cantidad</th><th>Responsable</th><th>Proyecto destino</th><th>Orden de compra</th></tr></thead>
+            <tbody>${list.length ? list.map(fila).join('') : '<tr><td colspan="6" class="text-center text-muted py-3">Sin movimientos registrados para ese material.</td></tr>'}</tbody></table></div>`;
+      } catch(e){ el('result').innerHTML = '<div class="alert alert-danger">'+e.message+'</div>'; }
+    };
+    el('formBusq').onsubmit = e => e.preventDefault();
+    el('formSerie').onsubmit = e => e.preventDefault();
+    el('buscarSerie').onclick = async (ev) => {
+      ev && ev.preventDefault();
+      const s = el('serieBusq').value.trim();
+      if (!s) { el('resultSerie').innerHTML = '<div class="alert alert-warning">Ingrese un número de serie.</div>'; return; }
+      try {
+        const d = await getJson('/api/almacen/instancias?serie=' + encodeURIComponent(s));
+        const estadoBadge = {'EN_ALMACEN':'bg-success','SALIDA':'bg-danger','MERMADO':'bg-warning text-dark'}[d.estado]||'bg-secondary';
+        el('resultSerie').innerHTML = `
+          <div class="card border-success"><div class="card-body">
+            <h6 class="mb-1">${esc(d.nombreMaterial||'—')} <span class="badge ${estadoBadge}">${esc(d.estado)}</span></h6>
+            <div class="text-muted small mb-2">N.° de serie: <strong>${esc(d.numeroSerie)}</strong></div>
+            <ul class="list-unstyled small mb-0">
+              <li>Código: <strong>${esc(d.codigoMaterial||'—')}</strong></li>
+              <li>Modelo: ${esc(d.modelo||'—')} · Marca: ${esc(d.marca||'—')} · Categoría: ${esc(d.categoria||'—')}</li>
+              <li>Orden de compra: ${esc(d.codigoOC||'—')}</li>
+              <li>Fecha de ingreso: ${d.fechaIngreso ? fmtFecha(d.fechaIngreso) : '—'}</li>
+            </ul>
+          </div></div>`;
+      } catch(e) {
+        el('resultSerie').innerHTML = /404|not found|no se encontr/i.test(e.message||'')
+          ? '<div class="alert alert-warning">No se encontró ninguna unidad con ese número de serie.</div>'
+          : '<div class="alert alert-danger">'+e.message+'</div>';
+      }
+    };
   } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">' + e.message + '</div>'; }
 })();
 </script>

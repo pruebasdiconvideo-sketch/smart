@@ -36,6 +36,8 @@ FLUSH PRIVILEGES;
 
 ### 2.2 Cargar el esquema y los datos iniciales
 
+#### Opción A — Base nueva (desde cero)
+
 Sólo para una base nueva (el esquema contiene instrucciones `DROP TABLE`):
 
 ```bash
@@ -44,19 +46,50 @@ mysql -u smartpoweron -p smart_power_on_db < src/main/resources/db/schema.sql
 mysql -u smartpoweron -p smart_power_on_db < src/main/resources/db/data.sql
 ```
 
-Para actualizar una base existente, realizar primero un respaldo y aplicar en
-orden `V2__material_extra_columns.sql` hasta `V6__mermas_devoluciones_logical_delete.sql`.
 No volver a ejecutar `schema.sql` ni `data.sql` sobre una base con datos.
+
+#### Opción B — Base existente `basecompleta.sql` (recomendado si ya tienes datos)
+
+Si ya cargaste tu base `basecompleta.sql` en MySQL (con tus 10 materiales,
+3 órdenes de compra, 3 proyectos, 5 usuarios y los stored procedures), sólo
+falta añadir las columnas de borrado lógico que usa la aplicación. Hay un
+**único script consolidado idempotente**:
+
+```bash
+mysql -u root -p smart_power_on_db < src/main/resources/db/MIGRAR_BASE_EXISTENTE.sql
+```
+
+Este script:
+- Verifica cada columna contra `INFORMATION_SCHEMA` y sólo añade las que falten.
+- Añade `anulada` + `motivo_anulacion` a `solicitud`, `despacho`,
+  `prueba_calidad` y `merma_devolucion`.
+- Añade `activo` a `parametro_prueba`.
+- Conserva todos tus datos y tus stored procedures existentes
+  (`sp_ConfirmarEntregaYDescontar`, `sp_RegistrarIngresoMaterial`,
+  `sp_ValidarMermaDevolucion`).
+- Puede ejecutarse cuantas veces sea necesario (es idempotente).
+
+> Alternativa granular: aplicar en orden `V2` hasta `V6` desde
+> `src/main/resources/db/migration/`. El consolidado hace exactamente lo mismo
+> en un solo paso.
 
 ### 2.3 Ajustar credenciales
 
-Configurar las variables de entorno del usuario del servicio; no insertar la
-contraseña en `application.properties`:
+La contraseña MySQL viene configurada por defecto como `123456789` en
+`application.properties`:
 
 ```
+spring.datasource.password=${SPRING_DATASOURCE_PASSWORD:123456789}
+```
+
+Por defecto la app se conecta a `jdbc:mysql://localhost:3306/smart_power_on_db`
+con usuario `root` y contraseña `123456789`. Si tu configuración es diferente,
+sobreescribe con variables de entorno (sin tocar el archivo):
+
+```bash
 export SPRING_DATASOURCE_URL='jdbc:mysql://localhost:3306/smart_power_on_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true'
-export SPRING_DATASOURCE_USERNAME='smartpoweron'
-export SPRING_DATASOURCE_PASSWORD='<contraseña-segura>'
+export SPRING_DATASOURCE_USERNAME='root'
+export SPRING_DATASOURCE_PASSWORD='123456789'
 ```
 
 ### 2.4 Compilar el JAR

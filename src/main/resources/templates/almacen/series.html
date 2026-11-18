@@ -1,0 +1,119 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Series de materiales')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Series de materiales</h3>
+        <p class="text-muted small mb-3">Listado de todos los productos con su respectivo número de serie, marca y modelo.</p>
+        <div class="card">
+          <div class="card-body">
+            <form class="row g-2 mb-3" id="filtros">
+              <div class="col-md-4">
+                <label class="form-label small text-muted">Buscar</label>
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input class="form-control" id="fTexto" placeholder="Código, nombre, serie, marca o modelo"/>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small text-muted">Categoría</label>
+                <select class="form-select" id="fCategoria"><option value="TODAS">Todas</option></select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small text-muted">Estado</label>
+                <select class="form-select" id="fEstado">
+                  <option value="TODOS">Todos</option>
+                  <option value="ACTIVO">Activo</option>
+                  <option value="INACTIVO">Inactivo</option>
+                </select>
+              </div>
+              <div class="col-md-3 d-flex align-items-end gap-2">
+                <button class="btn btn-outline-primary" type="submit"><i class="bi bi-funnel"></i> Filtrar</button>
+                <button class="btn btn-outline-secondary" type="button" id="limpiar">Limpiar</button>
+              </div>
+            </form>
+            <div id="resumen" class="text-muted small mb-2"></div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead><tr>
+                  <th>Código</th><th>Nombre</th><th>Categoría</th><th>Marca</th><th>Modelo</th>
+                  <th>N° de serie</th><th>MLFB</th><th>Ubicación</th><th>Stock</th><th>Estado</th>
+                </tr></thead>
+                <tbody id="tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  let todos = [];
+
+  async function cargarCategorias() {
+    let cats = [];
+    try { cats = await getJson('/api/almacen/categorias-lista'); } catch(e) {}
+    el('fCategoria').innerHTML = '<option value="TODAS">Todas</option>' +
+      cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  }
+
+  function ubicacion(m) {
+    const parts = [m.pasillo, m.estante, m.nivel].filter(v => v && String(v).trim());
+    return parts.length ? parts.join(' · ') : '<span class="text-muted">—</span>';
+  }
+
+  function dibujar(lista) {
+    el('tbody').innerHTML = lista.length ? lista.map(m => `<tr>
+      <td><strong>${esc(m.codigo)}</strong></td>
+      <td>${esc(m.nombre)}</td>
+      <td>${esc(m.categoria || '—')}</td>
+      <td>${esc(m.marca || '—')}</td>
+      <td>${esc(m.modelo || '—')}</td>
+      <td>${m.numeroSerie ? `<span class="serie-cell">${esc(m.numeroSerie)}</span>` : '<span class="text-muted">Sin serie</span>'}</td>
+      <td>${esc(m.mlfb || '—')}</td>
+      <td>${ubicacion(m)}</td>
+      <td class="${m.enAlerta ? 'text-danger fw-bold' : ''}">${m.stockActual}</td>
+      <td>${m.estado === 'ACTIVO' ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>'}</td>
+    </tr>`).join('') : '<tr><td colspan="10" class="text-center text-muted py-4">No hay materiales que coincidan con los filtros.</td></tr>';
+    el('resumen').textContent = `${lista.length} de ${todos.length} materiales`;
+  }
+
+  function aplicarFiltros() {
+    const texto = el('fTexto').value.trim().toLowerCase();
+    const cat = el('fCategoria').value;
+    const est = el('fEstado').value;
+    dibujar(todos.filter(m =>
+      (!texto || [m.codigo, m.nombre, m.numeroSerie, m.marca, m.modelo, m.mlfb]
+        .some(v => v && String(v).toLowerCase().includes(texto)))
+      && (cat === 'TODAS' || cat === '' || cat === (m.categoria || ''))
+      && (est === 'TODOS' || est === m.estado)
+    ));
+  }
+
+  el('filtros').onsubmit = e => { e.preventDefault(); aplicarFiltros(); };
+  el('limpiar').onclick = () => {
+    el('fTexto').value = ''; el('fCategoria').value = 'TODAS'; el('fEstado').value = 'TODOS';
+    dibujar(todos);
+  };
+  el('fTexto').addEventListener('input', aplicarFiltros);
+  el('fCategoria').addEventListener('change', aplicarFiltros);
+  el('fEstado').addEventListener('change', aplicarFiltros);
+
+  try {
+    await cargarCategorias();
+    todos = await getJson('/api/almacen/series');
+    dibujar(todos);
+  } catch(e) {
+    el('tbody').innerHTML = `<tr><td colspan="10" class="text-danger py-3">${esc(e.message)}</td></tr>`;
+  }
+})();
+</script>
+</body></html>

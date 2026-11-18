@@ -49,6 +49,18 @@ public class PageController {
     @GetMapping("/almacen/ingresos")
     public String ingresos(Model m) { contexto(m); return "almacen/ingresos"; }
 
+    // /almacen/categorias (ALMACENERO, ADMIN, JEFE_PRODUCCION, OPERARIO_ENSAMBLE)
+    @GetMapping("/almacen/categorias")
+    public String categorias(Model m) { contexto(m); return "almacen/categorias"; }
+
+    // /empresa/proveedores (ALMACENERO, ADMIN, JEFE_PRODUCCION)
+    @GetMapping("/empresa/proveedores")
+    public String proveedores(Model m) { contexto(m); return "empresa/proveedores"; }
+
+    // /empresa/clientes (JEFE_PRODUCCION, ADMIN)
+    @GetMapping("/empresa/clientes")
+    public String clientes(Model m) { contexto(m); return "empresa/clientes"; }
+
     // ===== M2 - Producción =====
     // V05 /produccion/proyectos (JEFE_PRODUCCION, ADMIN)
     @GetMapping("/produccion/proyectos")

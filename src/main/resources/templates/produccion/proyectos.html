@@ -9,7 +9,7 @@
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
         <h3 class="mb-1">Proyectos de tablero</h3>
-        <p class="text-muted small mb-3">P2-T02 · RF12</p>
+        <p class="text-muted small mb-3">Gestione los proyectos de tableros y sus presupuestos. Vincule el cliente registrado al crear el proyecto.</p>
         <div class="card">
           <div class="card-body">
             <div id="contenido"></div>
@@ -23,53 +23,70 @@
 <script>
 (async () => {
   try {
-    const datos = await getJson('/api/produccion/proyectos');
+    const [datos, clientes] = await Promise.all([
+      getJson('/api/produccion/proyectos'),
+      getJson('/api/empresa?tipo=CLIENTE')
+    ]);
     const proyectosPorId = new Map(datos.map(p => [p.idProyecto, p]));
-    el('contenido').innerHTML = `
-    <button class="btn btn-primary mb-3" id="btnNuevo">Nuevo proyecto</button>
-    <table class="table table-sm"><thead><tr><th>Código</th><th>Cliente</th><th>Inicio</th><th>Presupuesto</th><th>Estado</th><th>Acciones</th></tr></thead>
-    <tbody>${datos.map(p=>`<tr><td>${esc(p.codigo)}</td><td>${esc(p.cliente)}</td><td>${p.fechaInicio||''}</td><td>${fmtMonto(p.presupuesto)}</td><td>${esc(p.estado)}</td><td>${p.estado==='ANULADO'?'':`<button class="btn btn-sm btn-outline-primary me-1" onclick="editarProyecto(${p.idProyecto})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="anularProyecto(${p.idProyecto})">Anular</button>`}</td></tr>`).join('')}</tbody></table>
-    <div id="form" class="card p-3" style="display:none">
-      <h6 id="tituloFormulario">Nuevo proyecto</h6>
-      <div class="row g-2">
-        <div class="col"><input class="form-control" id="codigo" placeholder="Código"/></div>
-        <div class="col"><input class="form-control" id="cliente" placeholder="Cliente"/></div>
-        <div class="col"><input type="date" class="form-control" id="inicio"/></div>
-        <div class="col"><input type="number" step="0.01" class="form-control" id="presupuesto" placeholder="Presupuesto"/></div>
-      </div>
-      <button class="btn btn-primary mt-2" id="guardar">Guardar</button>
-      <button class="btn btn-outline-secondary mt-2" id="cancelar" type="button">Cancelar</button>
-    </div>`;
+  el('contenido').innerHTML =
+    '<button class="btn btn-primary mb-3" id="btnNuevo">Nuevo proyecto</button>' +
+    '<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Código</th><th>Cliente</th><th>RUC</th><th>Inicio</th><th>Presupuesto</th><th>Estado</th><th>Acciones</th></tr></thead>' +
+    '<tbody>' + datos.map(function(p){
+      var acciones = p.estado==='ANULADO' ? '' : '<button class="btn btn-sm btn-outline-primary me-1" onclick="editarProyecto(' + p.idProyecto + ')">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="anularProyecto(' + p.idProyecto + ')">Anular</button>';
+      return '<tr><td><strong>' + esc(p.codigo) + '</strong></td><td>' + esc(p.cliente) + '</td><td>' + esc(p.rucCliente||'—') + '</td><td>' + (p.fechaInicio||'') + '</td><td>S/ ' + fmtMonto(p.presupuesto) + '</td><td>' + esc(p.estado) + '</td><td>' + acciones + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div id="form" class="card p-3" style="display:none">' +
+      '<h6 id="tituloFormulario">Nuevo proyecto</h6>' +
+      '<div class="row g-2">' +
+        '<div class="col-md-3"><label class="form-label small">Código</label><input class="form-control" id="codigo" placeholder="TAB-2026-XXX"/></div>' +
+        '<div class="col-md-5"><label class="form-label small">Cliente (registrado)</label>' + modalSelectorMarkup('clienteSel', 'Buscar y seleccionar cliente') + '</div>' +
+        '<div class="col-md-2"><label class="form-label small">Inicio</label><input type="date" class="form-control" id="inicio"/></div>' +
+        '<div class="col-md-2"><label class="form-label small">Presupuesto</label><input type="number" step="0.01" class="form-control" id="presupuesto" placeholder="S/"/></div>' +
+      '</div>' +
+      '<div class="mt-2 small"><a href="/empresa/clientes" target="_blank">¿No encuentra el cliente? Regístrelo aquí.</a></div>' +
+      '<button class="btn btn-primary mt-2" id="guardar">Guardar</button> ' +
+      '<button class="btn btn-outline-secondary mt-2" id="cancelar" type="button">Cancelar</button>' +
+    '</div>';
+  initModalSelector('clienteSel', 'cliente', clientes.map(function(c){ return {value:c.idEmpresa, label:c.razonSocial + ' — RUC ' + c.ruc, meta:c.contactoNombre ? ('Contacto: ' + c.contactoNombre) : null}; }));
   let proyectoEditando = null;
-  document.getElementById('btnNuevo').onclick = () => {
+  el('btnNuevo').onclick = function(){
     proyectoEditando = null;
     el('tituloFormulario').textContent = 'Nuevo proyecto';
     el('codigo').value = '';
-    el('cliente').value = '';
+    el('clienteSel').value = '';
+    el('clienteSelDisplay').value = '';
     el('inicio').value = '';
     el('presupuesto').value = '';
     el('form').style.display = 'block';
   };
-  document.getElementById('cancelar').onclick = () => el('form').style.display = 'none';
-  window.editarProyecto = id => {
+  el('cancelar').onclick = function(){ el('form').style.display = 'none'; };
+  window.editarProyecto = function(id){
     const p = proyectosPorId.get(id);
     if (!p) return;
     proyectoEditando = id;
     el('tituloFormulario').textContent = 'Editar proyecto';
     el('codigo').value = p.codigo;
-    el('cliente').value = p.cliente;
+    el('clienteSel').value = p.idEmpresa || '';
+    el('clienteSelDisplay').value = p.cliente + (p.rucCliente ? ' — RUC ' + p.rucCliente : '');
     el('inicio').value = p.fechaInicio || '';
     el('presupuesto').value = p.presupuesto;
     el('form').style.display = 'block';
   };
-  window.anularProyecto = async id => {
+  window.anularProyecto = async function(id){
     if (!confirm('¿Anular este proyecto? Se conservará en el historial.')) return;
     try { await api('/api/produccion/proyectos/' + id, {method:'DELETE'}); window.location.reload(); }
     catch(e) { alert(e.message); }
   };
-  document.getElementById('guardar').onclick = async () => {
+  el('guardar').onclick = async function(){
+    var idEmp = el('clienteSel').value;
+    var datosProyecto = {
+      codigo: el('codigo').value,
+      idEmpresa: idEmp ? parseInt(idEmp) : null,
+      cliente: el('clienteSelDisplay').value || null,
+      fechaInicio: el('inicio').value,
+      presupuesto: parseFloat(el('presupuesto').value)
+    };
     try {
-      const datosProyecto = {codigo:el('codigo').value, cliente:el('cliente').value, fechaInicio:el('inicio').value, presupuesto: parseFloat(el('presupuesto').value)};
       if (proyectoEditando == null) await postJson('/api/produccion/proyectos', datosProyecto);
       else await putJson('/api/produccion/proyectos/' + proyectoEditando, datosProyecto);
       window.location.reload();

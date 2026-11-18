@@ -82,6 +82,7 @@ public class CalidadService {
                 .valorMedido(req.getValorMedido())
                 .resultado(resultado)
                 .observacion(observacion)
+                .tecnicoExterno(req.getTecnicoExterno())
                 .fechaPrueba(LocalDateTime.now())
                 .build();
         return toDto(pruebaRepo.save(pc));
@@ -238,6 +239,7 @@ public class CalidadService {
                 .resultado(pc.getResultado())
                 .observacion(pc.getObservacion())
                 .inspector(u == null ? null : u.getNombreCompleto())
+                .tecnicoExterno(pc.getTecnicoExterno())
                 .fechaPrueba(pc.getFechaPrueba())
                 .anulada(pc.getAnulada())
                 .motivoAnulacion(pc.getMotivoAnulacion())

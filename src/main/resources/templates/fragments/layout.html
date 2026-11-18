@@ -4,38 +4,155 @@
 <head th:fragment="head(titulo)">
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title th:text="${titulo} + ' - Smart Power On'">Smart Power On</title>
+  <meta name="theme-color" content="#0b3d91"/>
+  <title th:text="${titulo} + ' · Smart Power On'">Smart Power On</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" th:href="@{/css/styles.css}"/>
 </head>
 <body>
-<header th:fragment="topbar" class="navbar navbar-dark bg-dark px-3">
-  <span class="navbar-brand"><strong>Smart Power On S.A.C.</strong> · Gestión de Materiales</span>
-  <div class="d-flex align-items-center text-light small">
-    <span class="me-3" th:if="${nombreUsuario}" th:text="'Usuario: ' + ${nombreUsuario}">Usuario</span>
-    <span class="badge bg-secondary me-3" th:if="${rolUsuario}" th:text="${rolUsuario}">ROL</span>
-    <a href="/api/auth/logout" class="btn btn-sm btn-outline-light" data-method="post">Cerrar sesión</a>
+
+<!-- ============ Topbar ============ -->
+<header th:fragment="topbar" class="topbar">
+  <div class="d-flex align-items-center gap-3">
+    <button type="button" class="btn-menu-toggle" aria-label="Abrir menú"
+            onclick="document.querySelector('.sidebar').classList.toggle('show')">
+      <i class="bi bi-list"></i>
+    </button>
+    <span class="brand">
+      <span class="brand-mark"><i class="bi bi-lightning-charge-fill"></i></span>
+      <span class="brand-text">
+        Smart Power On
+        <small>Sistema de Gestión de Materiales</small>
+      </span>
+    </span>
+  </div>
+  <div class="topbar-meta">
+    <span class="user-chip" th:if="${nombreUsuario}">
+      <span class="avatar" th:text="${#strings.substring(nombreUsuario,0,1)}">U</span>
+      <span th:text="${nombreUsuario}">Usuario</span>
+    </span>
+    <span class="badge-rol" th:if="${rolUsuario}" th:text="${rolUsuario}">ROL</span>
+    <a href="/api/auth/logout" class="btn btn-logout" data-method="post">
+      <i class="bi bi-box-arrow-right"></i> Salir
+    </a>
   </div>
 </header>
-<nav th:fragment="menu" class="sidebar bg-light border-end">
-  <ul class="nav flex-column p-2">
-    <li class="nav-item"><a class="nav-link" href="/inicio">Panel principal</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION')"><a class="nav-link" href="/almacen/catalogo">Catálogo de materiales</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('ALMACENERO','ADMIN')"><a class="nav-link" href="/almacen/ingresos">Ingreso de materiales</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')"><a class="nav-link" href="/produccion/proyectos">Proyectos</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')"><a class="nav-link" href="/produccion/solicitudes">Solicitudes</a></li>
-    <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" href="/produccion/aprobaciones">Aprobaciones retenidas</a></li>
-    <li class="nav-item" sec:authorize="hasRole('ALMACENERO')"><a class="nav-link" href="/despacho/bandeja">Bandeja de despachos</a></li>
-    <li class="nav-item" sec:authorize="hasRole('ALMACENERO')"><a class="nav-link" href="/despacho/preparar">Preparar despacho</a></li>
-    <li class="nav-item" sec:authorize="hasRole('OPERARIO_ENSAMBLE')"><a class="nav-link" href="/despacho/confirmar">Confirmar recepción</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('INSPECTOR','JEFE_PRODUCCION','ADMIN')"><a class="nav-link" href="/calidad/pruebas">Pruebas de calidad</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('OPERARIO_ENSAMBLE','ALMACENERO','JEFE_PRODUCCION')"><a class="nav-link" href="/merma/devoluciones">Devoluciones / mermas</a></li>
-    <li class="nav-item" sec:authorize="hasRole('JEFE_PRODUCCION')"><a class="nav-link" href="/merma/reporte">Reporte de mermas</a></li>
-    <li class="nav-item" sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')"><a class="nav-link" href="/trazabilidad">Trazabilidad</a></li>
-    <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" href="/admin/usuarios">Usuarios</a></li>
-    <li class="nav-item" sec:authorize="hasRole('ADMIN')"><a class="nav-link" href="/admin/parametros">Rangos técnicos</a></li>
-  </ul>
+
+<!-- ============ Sidebar (menu) ============ -->
+<nav th:fragment="menu" class="sidebar" id="sidebar">
+  <span class="sidebar-section">Principal</span>
+  <a class="nav-link" th:href="@{/inicio}"
+     th:classappend="${currentPath == '/' or currentPath == '/inicio'} ? ' active' : ''">
+    <i class="bi bi-speedometer2"></i> Panel principal
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION')">Inventario</span>
+  <a class="nav-link" th:href="@{/almacen/catalogo}"
+     sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION')"
+     th:classappend="${currentPath == '/almacen/catalogo'} ? ' active' : ''">
+    <i class="bi bi-box-seam"></i> Catálogo de materiales
+  </a>
+  <a class="nav-link" th:href="@{/almacen/ingresos}"
+     sec:authorize="hasAnyRole('ALMACENERO','ADMIN')"
+     th:classappend="${currentPath == '/almacen/ingresos'} ? ' active' : ''">
+    <i class="bi bi-box-arrow-in-down"></i> Ingreso de materiales
+  </a>
+  <a class="nav-link" th:href="@{/almacen/categorias}"
+     sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION','OPERARIO_ENSAMBLE')"
+     th:classappend="${currentPath == '/almacen/categorias'} ? ' active' : ''">
+    <i class="bi bi-tags"></i> Stock por categoría
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION')">Empresas</span>
+  <a class="nav-link" th:href="@{/empresa/proveedores}"
+     sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION')"
+     th:classappend="${currentPath == '/empresa/proveedores'} ? ' active' : ''">
+    <i class="bi bi-truck"></i> Proveedores
+  </a>
+  <a class="nav-link" th:href="@{/empresa/clientes}"
+     sec:authorize="hasAnyRole('ALMACENERO','ADMIN','JEFE_PRODUCCION')"
+     th:classappend="${currentPath == '/empresa/clientes'} ? ' active' : ''">
+    <i class="bi bi-building"></i> Clientes
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')">Producción</span>
+  <a class="nav-link" th:href="@{/produccion/proyectos}"
+     sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')"
+     th:classappend="${currentPath == '/produccion/proyectos'} ? ' active' : ''">
+    <i class="bi bi-folder2-open"></i> Proyectos
+  </a>
+  <a class="nav-link" th:href="@{/produccion/solicitudes}"
+     sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')"
+     th:classappend="${currentPath == '/produccion/solicitudes'} ? ' active' : ''">
+    <i class="bi bi-clipboard-data"></i> Solicitudes
+  </a>
+  <a class="nav-link" th:href="@{/produccion/aprobaciones}"
+     sec:authorize="hasRole('ADMIN')"
+     th:classappend="${currentPath == '/produccion/aprobaciones'} ? ' active' : ''">
+    <i class="bi bi-shield-check"></i> Aprobaciones retenidas
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasAnyRole('ALMACENERO','OPERARIO_ENSAMBLE')">Despacho</span>
+  <a class="nav-link" th:href="@{/despacho/bandeja}"
+     sec:authorize="hasRole('ALMACENERO')"
+     th:classappend="${currentPath == '/despacho/bandeja'} ? ' active' : ''">
+    <i class="bi bi-truck"></i> Bandeja de despachos
+  </a>
+  <a class="nav-link" th:href="@{/despacho/preparar}"
+     sec:authorize="hasRole('ALMACENERO')"
+     th:classappend="${currentPath == '/despacho/preparar'} ? ' active' : ''">
+    <i class="bi bi-box2-heart"></i> Preparar despacho
+  </a>
+  <a class="nav-link" th:href="@{/despacho/confirmar}"
+     sec:authorize="hasRole('OPERARIO_ENSAMBLE')"
+     th:classappend="${currentPath == '/despacho/confirmar'} ? ' active' : ''">
+    <i class="bi bi-check2-circle"></i> Confirmar recepción
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasAnyRole('INSPECTOR','JEFE_PRODUCCION','ADMIN','OPERARIO_ENSAMBLE','ALMACENERO')">Calidad y mermas</span>
+  <a class="nav-link" th:href="@{/calidad/pruebas}"
+     sec:authorize="hasAnyRole('INSPECTOR','JEFE_PRODUCCION','ADMIN')"
+     th:classappend="${currentPath == '/calidad/pruebas'} ? ' active' : ''">
+    <i class="bi bi-clipboard-check"></i> Pruebas de calidad
+  </a>
+  <a class="nav-link" th:href="@{/merma/devoluciones}"
+     sec:authorize="hasAnyRole('OPERARIO_ENSAMBLE','ALMACENERO','JEFE_PRODUCCION')"
+     th:classappend="${currentPath == '/merma/devoluciones'} ? ' active' : ''">
+    <i class="bi bi-arrow-counterclockwise"></i> Devoluciones / mermas
+  </a>
+  <a class="nav-link" th:href="@{/merma/reporte}"
+     sec:authorize="hasRole('JEFE_PRODUCCION')"
+     th:classappend="${currentPath == '/merma/reporte'} ? ' active' : ''">
+    <i class="bi bi-graph-up-arrow"></i> Reporte de mermas
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN','INSPECTOR')">Trazabilidad</span>
+  <a class="nav-link" th:href="@{/trazabilidad}"
+     sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN')"
+     th:classappend="${currentPath == '/trazabilidad'} ? ' active' : ''">
+    <i class="bi bi-diagram-3"></i> Trazabilidad
+  </a>
+
+  <span class="sidebar-section" sec:authorize="hasRole('ADMIN')">Administración</span>
+  <a class="nav-link" th:href="@{/admin/usuarios}"
+     sec:authorize="hasRole('ADMIN')"
+     th:classappend="${currentPath == '/admin/usuarios'} ? ' active' : ''">
+    <i class="bi bi-people"></i> Usuarios
+  </a>
+  <a class="nav-link" th:href="@{/admin/parametros}"
+     sec:authorize="hasRole('ADMIN')"
+     th:classappend="${currentPath == '/admin/parametros'} ? ' active' : ''">
+    <i class="bi bi-sliders2-vertical"></i> Rangos técnicos
+  </a>
+
+  <div class="divider"></div>
+  <div class="px-3 pb-3" style="font-size:11px;color:var(--sp-text-light)">
+    <i class="bi bi-buildings"></i> Smart Power On S.A.C.<br/>
+    RUC 20606120860 · Comas, Lima
+  </div>
 </nav>
+
+<!-- ============ Scripts comunes ============ -->
 <footer th:fragment="scripts">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script th:src="@{/js/app.js}"></script>

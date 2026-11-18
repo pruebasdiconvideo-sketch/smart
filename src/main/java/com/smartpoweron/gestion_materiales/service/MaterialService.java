@@ -1,10 +1,16 @@
 package com.smartpoweron.gestion_materiales.service;
 
 import com.smartpoweron.gestion_materiales.dto.Dtos;
+import com.smartpoweron.gestion_materiales.entity.DetalleOrdenCompra;
+import com.smartpoweron.gestion_materiales.entity.Empresa;
 import com.smartpoweron.gestion_materiales.entity.Material;
+import com.smartpoweron.gestion_materiales.entity.MaterialInstancia;
 import com.smartpoweron.gestion_materiales.entity.OrdenCompra;
 import com.smartpoweron.gestion_materiales.entity.Usuario;
 import com.smartpoweron.gestion_materiales.exception.ReglaNegocioException;
+import com.smartpoweron.gestion_materiales.repository.DetalleOrdenCompraRepository;
+import com.smartpoweron.gestion_materiales.repository.EmpresaRepository;
+import com.smartpoweron.gestion_materiales.repository.MaterialInstanciaRepository;
 import com.smartpoweron.gestion_materiales.repository.MaterialRepository;
 import com.smartpoweron.gestion_materiales.repository.OrdenCompraRepository;
 import com.smartpoweron.gestion_materiales.security.SecurityUtil;
@@ -31,13 +37,21 @@ public class MaterialService {
 
     private final MaterialRepository materialRepo;
     private final OrdenCompraRepository ocRepo;
+    private final DetalleOrdenCompraRepository detalleOcRepo;
+    private final EmpresaRepository empresaRepo;
+    private final MaterialInstanciaRepository instanciaRepo;
     private final TrazabilidadService trazabilidadService;
     private final SecurityUtil securityUtil;
 
     public MaterialService(MaterialRepository materialRepo, OrdenCompraRepository ocRepo,
+                           DetalleOrdenCompraRepository detalleOcRepo, EmpresaRepository empresaRepo,
+                           MaterialInstanciaRepository instanciaRepo,
                            TrazabilidadService trazabilidadService, SecurityUtil securityUtil) {
         this.materialRepo = materialRepo;
         this.ocRepo = ocRepo;
+        this.detalleOcRepo = detalleOcRepo;
+        this.empresaRepo = empresaRepo;
+        this.instanciaRepo = instanciaRepo;
         this.trazabilidadService = trazabilidadService;
         this.securityUtil = securityUtil;
     }
@@ -45,14 +59,18 @@ public class MaterialService {
     // ===== RF05 - registrar material =====
     @Transactional
     public Dtos.MaterialDto registrarMaterial(Dtos.MaterialCreate req) {
-        if (materialRepo.existsByCodigo(req.getCodigo())) {
-            throw new ReglaNegocioException("El código ya se encuentra registrado");
+        // Código automático según categoría cuando no se proporciona
+        String codigo = (req.getCodigo() == null || req.getCodigo().isBlank())
+                ? siguienteCodigo(req.getCategoria())
+                : req.getCodigo().trim();
+        if (materialRepo.existsByCodigo(codigo)) {
+            throw new ReglaNegocioException("El código ya se encuentra registrado: " + codigo);
         }
         if (req.getStockMinimo() == null || req.getStockMinimo() < 0) {
             throw new ReglaNegocioException("El stock mínimo debe ser un número no negativo.");
         }
         Material m = Material.builder()
-                .codigo(req.getCodigo())
+                .codigo(codigo)
                 .nombre(req.getNombre())
                 .especificacionTecnica(req.getEspecificacionTecnica())
                 .descripcion(req.getDescripcion())
@@ -60,7 +78,6 @@ public class MaterialService {
                 .marca(req.getMarca())
                 .unidadMedida(req.getUnidadMedida())
                 .modelo(req.getModelo())
-                .numeroSerie(req.getNumeroSerie())
                 .mlfb(req.getMlfb())
                 .pasillo(req.getPasillo())
                 .estante(req.getEstante())
@@ -98,13 +115,15 @@ public class MaterialService {
         if (!"ACTIVO".equals(m.getEstado())) {
             throw new ReglaNegocioException("No se puede editar un material inactivo.");
         }
-        if (materialRepo.existsByCodigoAndIdMaterialNot(req.getCodigo(), id)) {
+        String codigoFinal = (req.getCodigo() == null || req.getCodigo().isBlank())
+                ? m.getCodigo() : req.getCodigo().trim();
+        if (materialRepo.existsByCodigoAndIdMaterialNot(codigoFinal, id)) {
             throw new ReglaNegocioException("El código ya se encuentra registrado.");
         }
         if (req.getStockMinimo() != null && req.getStockMinimo() < 0) {
             throw new ReglaNegocioException("El stock mínimo debe ser un número no negativo.");
         }
-        m.setCodigo(req.getCodigo());
+        m.setCodigo(codigoFinal);
         m.setNombre(req.getNombre());
         m.setEspecificacionTecnica(req.getEspecificacionTecnica());
         m.setDescripcion(req.getDescripcion());
@@ -112,7 +131,6 @@ public class MaterialService {
         m.setMarca(req.getMarca());
         m.setUnidadMedida(req.getUnidadMedida());
         m.setModelo(req.getModelo());
-        m.setNumeroSerie(req.getNumeroSerie());
         m.setMlfb(req.getMlfb());
         m.setPasillo(req.getPasillo());
         m.setEstante(req.getEstante());
@@ -160,13 +178,16 @@ public class MaterialService {
         List<String> noRegistrados = new ArrayList<>();
 
         for (Dtos.IngresoItem item : req.getItems()) {
-            // P1-RN02: cantidad > 0
-            if (item.getCantidad() == null || item.getCantidad() <= 0) {
-                throw new ReglaNegocioException("La cantidad debe ser mayor que cero.");
+            List<String> series = item.getNumeroSeries();
+            boolean conSeries = series != null && !series.isEmpty();
+            // Cantidad efectiva: una por serie si se proveen, si no la cantidad indicada
+            int cantidad = conSeries ? series.size() : (item.getCantidad() == null ? 0 : item.getCantidad());
+            if (cantidad <= 0) {
+                throw new ReglaNegocioException("La cantidad debe ser mayor que cero (ingrese series o una cantidad).");
             }
             Optional<Material> opt = materialRepo.findByCodigo(item.getCodigo());
             if (opt.isEmpty()) {
-                // P1-T05: el material debe registrarse primero (no se crea solo).
+                // El material debe registrarse primero en el catálogo (no se crea solo).
                 noRegistrados.add(item.getCodigo());
                 continue;
             }
@@ -174,13 +195,38 @@ public class MaterialService {
             if (!"ACTIVO".equals(m.getEstado())) {
                 throw new ReglaNegocioException("El material " + m.getCodigo() + " está inactivo.");
             }
-            // R-INV-02: stock + trazabilidad en la misma transacción
-            m.setStockActual(m.getStockActual() + item.getCantidad());
+            // Informe: "Número de serie único por cada producto" — validar y registrar una instancia por unidad
+            if (conSeries) {
+                java.util.Set<String> vistas = new java.util.HashSet<>();
+                for (String s : series) {
+                    String serie = s == null ? "" : s.trim();
+                    if (serie.isEmpty()) {
+                        throw new ReglaNegocioException("Hay un número de serie vacío para " + m.getCodigo() + ".");
+                    }
+                    if (!vistas.add(serie)) {
+                        throw new ReglaNegocioException("Número de serie duplicado en el ingreso: " + serie);
+                    }
+                    if (instanciaRepo.existsByNumeroSerie(serie)) {
+                        throw new ReglaNegocioException("El número de serie " + serie + " ya existe para " + m.getCodigo() + ".");
+                    }
+                    instanciaRepo.save(MaterialInstancia.builder()
+                            .idMaterial(m.getIdMaterial())
+                            .numeroSerie(serie)
+                            .idOrdenCompra(oc.getIdOrdenCompra())
+                            .idUsuario(u.getIdUsuario())
+                            .fechaIngreso(java.time.LocalDateTime.now())
+                            .estado("EN_ALMACEN")
+                            .build());
+                }
+            }
+            // R-INV-02: stock + trazabilidad en la MISMA transacción
+            m.setStockActual(m.getStockActual() + cantidad);
             materialRepo.save(m);
             trazabilidadService.registrarMovimiento(
                     m.getIdMaterial(), u.getIdUsuario(), null, oc.getIdOrdenCompra(),
-                    "ENTRADA", item.getCantidad());
-            detalle.add(m.getCodigo() + ": +" + item.getCantidad() + " -> stock " + m.getStockActual());
+                    "ENTRADA", cantidad);
+            detalle.add(m.getCodigo() + ": +" + cantidad + " -> stock " + m.getStockActual()
+                    + (conSeries ? " (" + series.size() + " serie(s) registradas)" : ""));
         }
         boolean exito = noRegistrados.isEmpty();
         String mensaje = exito
@@ -194,18 +240,77 @@ public class MaterialService {
                 .build();
     }
 
+    // ===== Trazabilidad individual por número de serie (informe) =====
+    @Transactional(readOnly = true)
+    public Dtos.MaterialInstanciaDto buscarInstanciaPorSerie(String numeroSerie) {
+        if (numeroSerie == null || numeroSerie.isBlank()) return null;
+        return instanciaRepo.findByNumeroSerie(numeroSerie.trim())
+                .map(this::toInstanciaDto)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Dtos.MaterialInstanciaDto> listarInstanciasPorMaterial(Long idMaterial) {
+        return instanciaRepo.findByIdMaterialOrderByIdInstanciaDesc(idMaterial).stream()
+                .map(this::toInstanciaDto)
+                .toList();
+    }
+
+    private Dtos.MaterialInstanciaDto toInstanciaDto(MaterialInstancia ins) {
+        Material m = materialRepo.findById(ins.getIdMaterial()).orElse(null);
+        String codigoOC = null;
+        if (ins.getIdOrdenCompra() != null) {
+            codigoOC = ocRepo.findById(ins.getIdOrdenCompra()).map(OrdenCompra::getCodigo).orElse(null);
+        }
+        return Dtos.MaterialInstanciaDto.builder()
+                .idInstancia(ins.getIdInstancia())
+                .numeroSerie(ins.getNumeroSerie())
+                .idMaterial(ins.getIdMaterial())
+                .codigoMaterial(m != null ? m.getCodigo() : null)
+                .nombreMaterial(m != null ? m.getNombre() : null)
+                .modelo(m != null ? m.getModelo() : null)
+                .marca(m != null ? m.getMarca() : null)
+                .categoria(m != null ? m.getCategoria() : null)
+                .idOrdenCompra(ins.getIdOrdenCompra())
+                .codigoOC(codigoOC)
+                .fechaIngreso(ins.getFechaIngreso() != null ? ins.getFechaIngreso().toString() : null)
+                .estado(ins.getEstado())
+                .build();
+    }
+
+    // ===== Marcado de instancias al salir/mermar stock (FIFO, best-effort) =====
+    // No lanza excepción: si no hay suficientes instancias (p. ej. stock heredado
+    // sin series), marca las que existan; el stock_actual ya se actualizó aparte.
+    @Transactional
+    public void marcarSalidaInstancias(Long idMaterial, int cantidad) {
+        marcarInstancias(idMaterial, cantidad, "EN_ALMACEN", "SALIDA");
+    }
+
+    @Transactional
+    public void marcarMermaInstancias(Long idMaterial, int cantidad) {
+        marcarInstancias(idMaterial, cantidad, "EN_ALMACEN", "MERMADO");
+    }
+
+    private void marcarInstancias(Long idMaterial, int cantidad, String desdeEstado, String haciaEstado) {
+        if (cantidad <= 0 || idMaterial == null) return;
+        try {
+            List<MaterialInstancia> enAlmacen = instanciaRepo.findByIdMaterialAndEstadoOrderByIdInstanciaAsc(
+                    idMaterial, desdeEstado, org.springframework.data.domain.PageRequest.of(0, cantidad));
+            for (MaterialInstancia ins : enAlmacen) {
+                ins.setEstado(haciaEstado);
+                instanciaRepo.save(ins);
+            }
+        } catch (Exception ignored) {
+            // best-effort: el stock_actual ya quedó consistente
+        }
+    }
+
     // ===== RF08 - listar órdenes de compra abiertas =====
     @Transactional(readOnly = true)
     public List<Dtos.OrdenCompraDto> listarOrdenes(boolean incluirCerradas) {
         List<OrdenCompra> ordenes = incluirCerradas ? ocRepo.findAll() : ocRepo.findByEstado("ABIERTA");
         return ordenes.stream()
-                .map(oc -> Dtos.OrdenCompraDto.builder()
-                        .idOrdenCompra(oc.getIdOrdenCompra())
-                        .codigo(oc.getCodigo())
-                        .proveedor(oc.getProveedor())
-                        .fechaEmision(oc.getFechaEmision())
-                        .estado(oc.getEstado())
-                        .build())
+                .map(this::toOrdenDto)
                 .toList();
     }
 
@@ -214,13 +319,28 @@ public class MaterialService {
         if (ocRepo.findByCodigo(req.getCodigo()).isPresent()) {
             throw new ReglaNegocioException("El código de orden ya está registrado.");
         }
+        String proveedor = req.getProveedor();
+        Long idEmpresa = req.getIdEmpresa();
+        if (idEmpresa != null) {
+            Empresa emp = empresaRepo.findById(idEmpresa).orElseThrow(() ->
+                    new ReglaNegocioException("La empresa (proveedor) seleccionada no existe."));
+            if (!"PROVEEDOR".equalsIgnoreCase(emp.getTipo())) {
+                throw new ReglaNegocioException("La empresa seleccionada no es un proveedor.");
+            }
+            proveedor = emp.getRazonSocial();
+        } else if (proveedor == null || proveedor.isBlank()) {
+            throw new ReglaNegocioException("Debe seleccionar un proveedor registrado o ingresar su nombre.");
+        }
         OrdenCompra orden = OrdenCompra.builder()
                 .codigo(req.getCodigo())
-                .proveedor(req.getProveedor())
+                .proveedor(proveedor)
+                .idEmpresa(idEmpresa)
                 .fechaEmision(req.getFechaEmision())
                 .estado("ABIERTA")
                 .build();
-        return toOrdenDto(ocRepo.save(orden));
+        orden = ocRepo.save(orden);
+        guardarItems(orden.getIdOrdenCompra(), req.getItems());
+        return toOrdenDto(orden);
     }
 
     @Transactional
@@ -233,10 +353,28 @@ public class MaterialService {
         if (ocRepo.existsByCodigoAndIdOrdenCompraNot(req.getCodigo(), id)) {
             throw new ReglaNegocioException("El código de orden ya está registrado.");
         }
+        String proveedor = req.getProveedor();
+        Long idEmpresa = req.getIdEmpresa();
+        if (idEmpresa != null) {
+            Empresa emp = empresaRepo.findById(idEmpresa).orElseThrow(() ->
+                    new ReglaNegocioException("La empresa (proveedor) seleccionada no existe."));
+            if (!"PROVEEDOR".equalsIgnoreCase(emp.getTipo())) {
+                throw new ReglaNegocioException("La empresa seleccionada no es un proveedor.");
+            }
+            proveedor = emp.getRazonSocial();
+        }
         orden.setCodigo(req.getCodigo());
-        orden.setProveedor(req.getProveedor());
+        if (proveedor != null && !proveedor.isBlank()) {
+            orden.setProveedor(proveedor);
+        }
+        orden.setIdEmpresa(idEmpresa);
         orden.setFechaEmision(req.getFechaEmision());
-        return toOrdenDto(ocRepo.save(orden));
+        orden = ocRepo.save(orden);
+        if (req.getItems() != null) {
+            detalleOcRepo.deleteByIdOrdenCompra(orden.getIdOrdenCompra());
+            guardarItems(orden.getIdOrdenCompra(), req.getItems());
+        }
+        return toOrdenDto(orden);
     }
 
     @Transactional
@@ -262,13 +400,67 @@ public class MaterialService {
     }
 
     private Dtos.OrdenCompraDto toOrdenDto(OrdenCompra orden) {
+        String ruc = null;
+        if (orden.getIdEmpresa() != null) {
+            ruc = empresaRepo.findById(orden.getIdEmpresa())
+                    .map(Empresa::getRuc).orElse(null);
+        }
+        List<Dtos.DetalleOrdenCompraDto> items = detalleOcRepo
+                .findByIdOrdenCompra(orden.getIdOrdenCompra()).stream()
+                .map(this::toDetalleDto).toList();
         return Dtos.OrdenCompraDto.builder()
                 .idOrdenCompra(orden.getIdOrdenCompra())
                 .codigo(orden.getCodigo())
                 .proveedor(orden.getProveedor())
+                .idEmpresa(orden.getIdEmpresa())
+                .rucProveedor(ruc)
                 .fechaEmision(orden.getFechaEmision())
                 .estado(orden.getEstado())
+                .items(items)
                 .build();
+    }
+
+    private Dtos.DetalleOrdenCompraDto toDetalleDto(DetalleOrdenCompra d) {
+        String codigo = null, nombre = null, categoria = null, unidad = null;
+        if (d.getIdMaterial() != null) {
+            Material mat = materialRepo.findById(d.getIdMaterial()).orElse(null);
+            if (mat != null) {
+                codigo = mat.getCodigo();
+                nombre = mat.getNombre();
+                categoria = mat.getCategoria();
+                unidad = mat.getUnidadMedida();
+            }
+        }
+        return Dtos.DetalleOrdenCompraDto.builder()
+                .idDetalleOc(d.getIdDetalleOc())
+                .idMaterial(d.getIdMaterial())
+                .cantidad(d.getCantidad())
+                .precioUnitario(d.getPrecioUnitario())
+                .codigoMaterial(codigo)
+                .nombreMaterial(nombre)
+                .categoria(categoria)
+                .unidadMedida(unidad)
+                .build();
+    }
+
+    private void guardarItems(Long idOrdenCompra, List<Dtos.DetalleOrdenCompraDto> items) {
+        if (items == null || items.isEmpty()) return;
+        for (Dtos.DetalleOrdenCompraDto item : items) {
+            if (item.getIdMaterial() == null) continue;
+            if (item.getCantidad() == null || item.getCantidad() <= 0) {
+                throw new ReglaNegocioException("La cantidad de cada ítem debe ser mayor que cero.");
+            }
+            if (!materialRepo.existsById(item.getIdMaterial())) {
+                throw new ReglaNegocioException("El material del ítem no existe (id=" + item.getIdMaterial() + ").");
+            }
+            DetalleOrdenCompra det = DetalleOrdenCompra.builder()
+                    .idOrdenCompra(idOrdenCompra)
+                    .idMaterial(item.getIdMaterial())
+                    .cantidad(item.getCantidad())
+                    .precioUnitario(item.getPrecioUnitario())
+                    .build();
+            detalleOcRepo.save(det);
+        }
     }
 
     // ===== RF11 - alertas de stock mínimo =====
@@ -279,6 +471,84 @@ public class MaterialService {
                 .filter(m -> m.getStockActual() <= m.getStockMinimo())
                 .map(this::toDto)
                 .toList();
+    }
+
+    // ===== Stock agrupado por categoria =====
+    @Transactional(readOnly = true)
+    public List<Dtos.CategoriaStockDto> stockPorCategoria() {
+        java.util.Map<String, List<Material>> porCat = materialRepo.findAll().stream()
+                .filter(m -> "ACTIVO".equals(m.getEstado()))
+                .collect(java.util.stream.Collectors.groupingBy(
+                        m -> (m.getCategoria() == null || m.getCategoria().isBlank())
+                                ? "Sin categoría" : m.getCategoria()));
+        return porCat.entrySet().stream()
+                .map(e -> {
+                    List<Material> lista = e.getValue();
+                    int stockTotal = lista.stream().mapToInt(Material::getStockActual).sum();
+                    int stockMinTotal = lista.stream().mapToInt(Material::getStockMinimo).sum();
+                    java.math.BigDecimal valor = lista.stream()
+                            .map(m -> m.getPrecioUnitario().multiply(java.math.BigDecimal.valueOf(m.getStockActual())))
+                            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                    long alertas = lista.stream().filter(m -> m.getStockActual() <= m.getStockMinimo()).count();
+                    return Dtos.CategoriaStockDto.builder()
+                            .categoria(e.getKey())
+                            .numMateriales(lista.size())
+                            .stockTotal(stockTotal)
+                            .stockMinimoTotal(stockMinTotal)
+                            .valorInventario(valor)
+                            .enAlerta(alertas)
+                            .build();
+                })
+                .sorted(java.util.Comparator.comparing(Dtos.CategoriaStockDto::getCategoria))
+                .toList();
+    }
+
+    // ===== Categorias disponibles (para dropdowns de filtros) =====
+    @Transactional(readOnly = true)
+    public List<String> categoriasDisponibles() {
+        return materialRepo.findAll().stream()
+                .map(Material::getCategoria)
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    // ===== Código automático según categoría =====
+    // Genera un código tipo <PREFIJO>-<NNNN> donde el prefijo son las primeras
+    // 4 letras de la categoría (sin acentos, mayúsculas) y NNNN es el siguiente
+    // consecutivo entre los materiales cuyo código empieza con ese prefijo.
+    // Ej.: PROTECCION -> PROT-0001, INTERRUPCION -> INTE-0001, CABLE -> CABL-0001
+    @Transactional(readOnly = true)
+    public String siguienteCodigo(String categoria) {
+        String prefijo = prefijoCategoria(categoria);
+        int maxSeq = materialRepo.findAll().stream()
+                .map(Material::getCodigo)
+                .filter(c -> c != null && c.startsWith(prefijo + "-"))
+                .mapToInt(c -> {
+                    try {
+                        String num = c.substring(prefijo.length() + 1).replaceAll("[^0-9]", "");
+                        return num.isEmpty() ? 0 : Integer.parseInt(num);
+                    } catch (Exception e) { return 0; }
+                })
+                .max()
+                .orElse(0);
+        return String.format("%s-%04d", prefijo, maxSeq + 1);
+    }
+
+    private String prefijoCategoria(String categoria) {
+        if (categoria == null || categoria.isBlank()) return "MAT";
+        String limpio = java.text.Normalizer.normalize(categoria, java.text.Normalizer.Form.NFD)
+                .replaceAll("[^\\p{ASCII}]", "")
+                .toUpperCase()
+                .replaceAll("[^A-Z0-9]", "");
+        if (limpio.isEmpty()) return "MAT";
+        return limpio.length() >= 4 ? limpio.substring(0, 4)
+                : String.format("%-4s", limpio).replace(' ', '0');
+    }
+
+    private boolean contiene(String valor, String texto) {
+        return valor != null && valor.toLowerCase().contains(texto.toLowerCase());
     }
 
     // ===== Compatibilidad con vistas Thymeleaf antiguas =====
@@ -308,7 +578,6 @@ public class MaterialService {
             actual.setMarca(material.getMarca());
             actual.setUnidadMedida(material.getUnidadMedida());
             actual.setModelo(material.getModelo());
-            actual.setNumeroSerie(material.getNumeroSerie());
             actual.setMlfb(material.getMlfb());
             actual.setPasillo(material.getPasillo());
             actual.setEstante(material.getEstante());
@@ -348,7 +617,6 @@ public class MaterialService {
                 .marca(m.getMarca())
                 .unidadMedida(m.getUnidadMedida())
                 .modelo(m.getModelo())
-                .numeroSerie(m.getNumeroSerie())
                 .mlfb(m.getMlfb())
                 .pasillo(m.getPasillo())
                 .estante(m.getEstante())

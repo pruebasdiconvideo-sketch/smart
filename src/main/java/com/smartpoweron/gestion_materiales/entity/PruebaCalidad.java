@@ -41,4 +41,7 @@ public class PruebaCalidad {
 
     @Column(name = "motivo_anulacion", columnDefinition = "TEXT")
     private String motivoAnulacion;
+
+    @Column(name = "tecnico_externo", length = 150)
+    private String tecnicoExterno;
 }

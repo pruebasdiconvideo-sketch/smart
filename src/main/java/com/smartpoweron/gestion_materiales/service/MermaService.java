@@ -32,19 +32,22 @@ public class MermaService {
     private final UsuarioRepository usuarioRepo;
     private final TrazabilidadService trazabilidadService;
     private final SecurityUtil securityUtil;
+    private final MaterialService materialService;
 
     public MermaService(MermaDevolucionRepository mermaRepo,
                         MaterialRepository materialRepo,
                         ProyectoRepository proyectoRepo,
                         UsuarioRepository usuarioRepo,
                         TrazabilidadService trazabilidadService,
-                        SecurityUtil securityUtil) {
+                        SecurityUtil securityUtil,
+                        MaterialService materialService) {
         this.mermaRepo = mermaRepo;
         this.materialRepo = materialRepo;
         this.proyectoRepo = proyectoRepo;
         this.usuarioRepo = usuarioRepo;
         this.trazabilidadService = trazabilidadService;
         this.securityUtil = securityUtil;
+        this.materialService = materialService;
     }
 
     // ===== Consulta de devoluciones (auxiliar de la vista V12) =====
@@ -121,6 +124,8 @@ public class MermaService {
             }
             material.setStockActual(material.getStockActual() - md.getCantidad());
             materialRepo.save(material);
+            // Trazabilidad individual: marcar instancias como MERMADO (FIFO best-effort)
+            materialService.marcarMermaInstancias(material.getIdMaterial(), md.getCantidad());
             trazabilidadService.registrarMovimiento(material.getIdMaterial(), actor.getIdUsuario(),
                     md.getIdProyecto(), null, "MERMA", md.getCantidad());
         } else if ("MERMADO".equals(md.getEstado())) {

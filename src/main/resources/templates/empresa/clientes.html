@@ -1,0 +1,114 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Clientes')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Clientes</h3>
+        <p class="text-muted small mb-3">Registro de empresas clientes con RUC, razón social, razón comercial y contacto. Regístrelas una sola vez y reutilícelas al crear proyectos.</p>
+        <div class="card">
+          <div class="card-body">
+            <span id="puedeEditar" sec:authorize="hasAnyRole('JEFE_PRODUCCION','ADMIN','ALMACENERO')" hidden></span>
+            <div id="contenido"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  const puedeEditar = Boolean(el('puedeEditar'));
+  const TIPO = 'CLIENTE';
+  const LABEL = 'cliente';
+  let empresas = [];
+  let editando = null;
+  const campos = [
+    ['ruc','RUC','text',true], ['razonSocial','Razón social','text',true],
+    ['razonComercial','Razón comercial','text',false],
+    ['contactoNombre','Contacto (nombre)','text',false],
+    ['contactoTelefono','Teléfono','text',false], ['contactoCorreo','Correo','text',false]
+  ];
+
+  function dibujar(lista) {
+    const formHtml = campos.map(([id,label,type,req]) => `
+      <div class="col-md-4"><label class="form-label" for="emp-${id}">${label}</label>
+      <input class="form-control" id="emp-${id}" type="${type}" ${req?'required':''} placeholder="${label}"/></div>`).join('');
+    el('contenido').innerHTML = `
+      ${puedeEditar ? '<button class="btn btn-primary mb-3" id="nuevo">Nuevo '+LABEL+'</button>' : ''}
+      <form class="row g-2 mb-3" id="filtros">
+        <div class="col-md-5"><div class="input-group"><span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input class="form-control" id="fTexto" placeholder="RUC, razón social o contacto"/></div></div>
+        <div class="col-md-2"><select class="form-select" id="fEstado"><option value="TODOS">Todos</option><option value="ACTIVO">Activo</option><option value="INACTIVO">Inactivo</option></select></div>
+        <div class="col-md-2"><button class="btn btn-outline-primary" type="submit">Filtrar</button></div>
+      </form>
+      <div id="resumen" class="text-muted small mb-2"></div>
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr><th>RUC</th><th>Razón social</th><th>Razón comercial</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th>Estado</th>${puedeEditar?'<th>Acciones</th>':''}</tr></thead>
+        <tbody>${lista.length ? lista.map(e=>`<tr>
+          <td><strong>${esc(e.ruc)}</strong></td>
+          <td>${esc(e.razonSocial)}</td>
+          <td>${esc(e.razonComercial||'—')}</td>
+          <td>${esc(e.contactoNombre||'—')}</td>
+          <td>${esc(e.contactoTelefono||'—')}</td>
+          <td>${esc(e.contactoCorreo||'—')}</td>
+          <td>${e.estado==='ACTIVO'?'<span class="badge bg-success">Activo</span>':'<span class="badge bg-secondary">Inactivo</span>'}</td>
+          <td>${puedeEditar?(e.estado==='ACTIVO'
+            ?`<button class="btn btn-sm btn-outline-primary me-1" onclick="editar(${e.idEmpresa})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="desactivar(${e.idEmpresa})">Desactivar</button>`
+            :`<button class="btn btn-sm btn-outline-success" onclick="reactivar(${e.idEmpresa})">Reactivar</button>`):''}</td>
+        </tr>`).join('') : '<tr><td colspan="8" class="text-center text-muted py-4">No hay '+LABEL+'s registrados.</td></tr>'}</tbody></table></div>
+      ${puedeEditar?`<div id="formEmp" class="card p-3 mt-3" style="display:none">
+        <h6 id="tituloEmp">Nuevo ${LABEL}</h6><form id="datosEmp" class="row g-2">${formHtml}
+        <div class="col-12"><button class="btn btn-primary" type="submit">Guardar</button>
+          <button class="btn btn-secondary" type="button" id="cancelar">Cancelar</button></div></form></div>`:''}`;
+    el('resumen').textContent = `${lista.length} de ${empresas.length} ${LABEL}s`;
+    el('filtros').onsubmit = ev => { ev.preventDefault(); aplicar(); };
+    el('fTexto').addEventListener('input', aplicar);
+    el('fEstado').addEventListener('change', aplicar);
+    if (!puedeEditar) return;
+    el('nuevo').onclick = () => abrir(null);
+    el('cancelar').onclick = () => abrir(null,false);
+    el('datosEmp').onsubmit = async ev => {
+      ev.preventDefault();
+      const body = { tipo: TIPO };
+      campos.forEach(([id]) => { body[id] = el('emp-'+id).value.trim() || null; });
+      try {
+        if (editando===null) await postJson('/api/empresa', body);
+        else await putJson('/api/empresa/'+editando, body);
+        window.location.reload();
+      } catch(e){ alert(e.message); }
+    };
+  }
+
+  function aplicar() {
+    const t = el('fTexto').value.trim().toLowerCase();
+    const est = el('fEstado').value;
+    dibujar(empresas.filter(e =>
+      (!t || [e.ruc,e.razonSocial,e.razonComercial,e.contactoNombre].some(v=>v&&v.toLowerCase().includes(t)))
+      && (est==='TODOS'||est===e.estado)));
+  }
+
+  function abrir(e, mostrar=true) {
+    editando = e ? e.idEmpresa : null;
+    el('tituloEmp').textContent = e ? 'Editar '+LABEL : 'Nuevo '+LABEL;
+    el('datosEmp').reset();
+    if (e) campos.forEach(([id]) => { el('emp-'+id).value = e[id] ?? ''; });
+    el('formEmp').style.display = mostrar?'block':'none';
+    if (mostrar) el('formEmp').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  try {
+    empresas = await getJson('/api/empresa?tipo='+TIPO);
+    dibujar(empresas);
+    window.editar = id => { const e = empresas.find(x=>x.idEmpresa===id); if(e) abrir(e); };
+    window.desactivar = async id => { if(!confirm('¿Desactivar este '+LABEL+'?'))return; try{await patch('/api/empresa/'+id+'/desactivar');window.location.reload();}catch(e){alert(e.message);} };
+    window.reactivar = async id => { try{await patch('/api/empresa/'+id+'/reactivar');window.location.reload();}catch(e){alert(e.message);} };
+  } catch(e) { el('contenido').innerHTML = '<div class="alert alert-danger">'+esc(e.message)+'</div>'; }
+})();
+</script>
+</body></html>

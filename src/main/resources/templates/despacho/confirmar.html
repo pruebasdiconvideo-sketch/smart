@@ -9,7 +9,7 @@
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
         <h3 class="mb-1">Confirmar recepción de kits</h3>
-        <p class="text-muted small mb-3">P3-T06, P3-T07 · RF23, RF24</p>
+        <p class="text-muted small mb-3">Confirme la recepcion de kits y descuente el stock entregado.</p>
         <div class="card">
           <div class="card-body">
             <div id="contenido"></div>
@@ -32,7 +32,7 @@
       <td><button class="btn btn-sm btn-success me-1" onclick="conf(${d.idDespacho})">Confirmar recepción</button>
         <button class="btn btn-sm btn-outline-danger" onclick="anular(${d.idDespacho})">Anular pendiente</button></td>
     </tr>`).join('')}</tbody></table>
-    <p class="small text-muted">Al confirmar, el sistema descuenta el stock y registra el movimiento SALIDA (P3-RN03).</p>` : '<p class="text-muted">No hay despachos pendientes de confirmación.</p>';
+    <p class="small text-muted">Al confirmar, el sistema descuenta el stock y registra el movimiento SALIDA.</p>` : '<p class="text-muted">No hay despachos pendientes de confirmación.</p>';
   window.conf = async id => {
     try { const r = await postJson('/api/despacho/'+id+'/confirmar', {}); alert('Recepción confirmada. Stock descontado. Estado: ' + r.estado); window.location.reload(); }
     catch(e){ alert(e.message); }

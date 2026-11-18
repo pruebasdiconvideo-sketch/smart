@@ -86,6 +86,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH, "/api/almacen/ordenes-compra/**/reabrir").hasAnyRole("ALMACENERO","ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/almacen/ingresos").hasRole("ALMACENERO")
                 .requestMatchers(HttpMethod.GET,  "/api/almacen/alertas-stock").hasAnyRole("ALMACENERO","ADMIN")
+                .requestMatchers(HttpMethod.GET,  "/api/almacen/categorias").hasAnyRole("ADMIN","ALMACENERO","JEFE_PRODUCCION","OPERARIO_ENSAMBLE")
+                .requestMatchers(HttpMethod.GET,  "/api/almacen/categorias-lista").hasAnyRole("ADMIN","ALMACENERO","JEFE_PRODUCCION","OPERARIO_ENSAMBLE")
+                .requestMatchers(HttpMethod.GET,  "/api/almacen/instancias").hasAnyRole("ADMIN","ALMACENERO","JEFE_PRODUCCION","OPERARIO_ENSAMBLE")
+                // --- Empresas (proveedores y clientes) ---
+                .requestMatchers(HttpMethod.GET,  "/api/empresa").hasAnyRole("ADMIN","ALMACENERO","JEFE_PRODUCCION","OPERARIO_ENSAMBLE")
+                .requestMatchers(HttpMethod.GET,  "/api/empresa/**").hasAnyRole("ADMIN","ALMACENERO","JEFE_PRODUCCION","OPERARIO_ENSAMBLE")
+                .requestMatchers(HttpMethod.POST, "/api/empresa").hasAnyRole("ALMACENERO","ADMIN","JEFE_PRODUCCION")
+                .requestMatchers(HttpMethod.PUT,  "/api/empresa/**").hasAnyRole("ALMACENERO","ADMIN","JEFE_PRODUCCION")
+                .requestMatchers(HttpMethod.PATCH, "/api/empresa/**/desactivar").hasAnyRole("ALMACENERO","ADMIN","JEFE_PRODUCCION")
+                .requestMatchers(HttpMethod.PATCH, "/api/empresa/**/reactivar").hasAnyRole("ALMACENERO","ADMIN","JEFE_PRODUCCION")
+                .requestMatchers(HttpMethod.GET,  "/api/almacen/materiales/siguiente-codigo").hasAnyRole("ALMACENERO","ADMIN")
 
                 // --- M2 · Producción / Solicitudes ---
                 .requestMatchers(HttpMethod.GET,  "/api/produccion/proyectos").hasAnyRole("JEFE_PRODUCCION","ADMIN","INSPECTOR","OPERARIO_ENSAMBLE","ALMACENERO")

@@ -9,7 +9,7 @@
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
         <h3 class="mb-1">Pruebas funcionales y certificado</h3>
-        <p class="text-muted small mb-3">P4-T02 a P4-T09 · RF25-RF29</p>
+        <p class="text-muted small mb-3">Registre mediciones de calidad y emita el certificado de conformidad.</p>
         <div class="card">
           <div class="card-body">
             <div id="contenido"></div>
@@ -34,12 +34,13 @@
     <div class="row mb-3">
       <div class="col-md-3"><label class="form-label" for="proyectoDisplay">Proyecto</label>${modalSelectorMarkup('proyecto', 'Seleccione un proyecto')}</div>
       <div class="col-md-3"><label class="form-label" for="parametroDisplay">Parámetro</label>${modalSelectorMarkup('parametro', 'Seleccione un parámetro')}</div>
-      <div class="col-md-3"><input id="valor" class="form-control" type="number" step="0.001" placeholder="Valor medido"/></div>
-      <div class="col-md-3"><button class="btn btn-primary w-100" id="registrar">Registrar prueba</button>
+      <div class="col-md-2"><label class="form-label" for="valor">Valor medido</label><input id="valor" class="form-control" type="number" step="0.001" placeholder="Valor"/></div>
+      <div class="col-md-2"><label class="form-label" for="tecnico">Técnico que realiza la prueba</label><input id="tecnico" class="form-control" placeholder="Nombre del técnico externo"/></div>
+      <div class="col-md-2"><label class="form-label">&nbsp;</label><button class="btn btn-primary w-100" id="registrar">Registrar prueba</button>
         <button class="btn btn-secondary w-100 mt-1" id="cancelarEdicion" type="button" style="display:none">Cancelar edición</button></div>
     </div>
-    <button class="btn btn-warning mb-3" id="cert">Generar certificado PDF (RF28)</button>
-    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Parámetro</th><th>Valor medido</th><th>Rango</th><th>Resultado</th><th>Inspector</th><th>Fecha</th><th>Estado / acciones</th></tr></thead>
+    <button class="btn btn-warning mb-3" id="cert">Generar certificado PDF</button>
+    <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Parámetro</th><th>Valor medido</th><th>Rango</th><th>Resultado</th><th>Técnico</th><th>Inspector</th><th>Fecha</th><th>Estado / acciones</th></tr></thead>
     <tbody id="hist"></tbody></table>`;
     initModalSelector('proyecto', 'proyecto', proyectos.map(p=>({value:p.idProyecto,label:`${p.codigo} - ${p.cliente}`})));
     initModalSelector('parametro', 'parámetro de prueba', parametros.map(p=>({value:p.idParametro,label:`${p.tipoPrueba} (${p.valorMinimo}-${p.valorMaximo} ${p.unidad||''})`})));
@@ -49,6 +50,7 @@
       el('hist').innerHTML = lista.map(p=>`<tr>
         <td>${esc(p.tipoPrueba)}</td><td>${p.valorMedido} ${esc(p.unidad||'')}</td><td>${p.valorMinimo} - ${p.valorMaximo}</td>
         <td><span class="badge ${p.resultado==='CONFORME'?'bg-success':'bg-danger'}">${esc(p.resultado)}</span></td>
+        <td>${esc(p.tecnicoExterno||'—')}</td>
         <td>${esc(p.inspector)}</td><td>${fmtFecha(p.fechaPrueba)}</td>
         <td>${p.anulada?`<span class="badge bg-secondary">Anulada</span><div class="small text-muted">${esc(p.motivoAnulacion||'')}</div>`:
           `<button class="btn btn-sm btn-outline-primary me-1" onclick="editarPrueba(${p.idPrueba})">Editar</button><button class="btn btn-sm btn-outline-danger" onclick="anularPrueba(${p.idPrueba})">Anular</button>`}</td>
@@ -63,6 +65,7 @@
     el('registrar').textContent = 'Registrar prueba';
     el('cancelarEdicion').style.display = 'none';
     el('valor').value = '';
+    el('tecnico').value = '';
   };
   window.editarPrueba = async id => {
     const lista = await getJson('/api/calidad/pruebas?proyecto='+el('proyecto').value);
@@ -80,6 +83,7 @@
     el('parametro').value = String(parametro.idParametro);
     el('parametroDisplay').value = `${parametro.tipoPrueba} (${parametro.valorMinimo}-${parametro.valorMaximo} ${parametro.unidad||''})`;
     el('valor').value = prueba.valorMedido;
+    el('tecnico').value = prueba.tecnicoExterno || '';
     el('registrar').textContent = 'Guardar reemplazo';
     el('cancelarEdicion').style.display = 'block';
     el('valor').focus();
@@ -91,7 +95,7 @@
     catch(e){ alert(e.message); }
   };
   el('registrar').onclick = async () => {
-    const body = {idProyecto:parseInt(el('proyecto').value), idParametro:parseInt(el('parametro').value), valorMedido:parseFloat(el('valor').value)};
+    const body = {idProyecto:parseInt(el('proyecto').value), idParametro:parseInt(el('parametro').value), valorMedido:parseFloat(el('valor').value), tecnicoExterno:el('tecnico').value.trim()||null};
     try {
       if (!body.idProyecto || !body.idParametro || Number.isNaN(body.valorMedido)) { alert('Seleccione proyecto, parámetro e ingrese el valor medido.'); return; }
       if (pruebaEditando === null) await postJson('/api/calidad/pruebas', body);

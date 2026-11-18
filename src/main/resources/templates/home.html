@@ -3,34 +3,128 @@
 <head th:replace="~{fragments/layout :: head('Panel principal')}"></head>
 <body>
 <div class="layout">
-  <div class="w-100">
+  <div class="w-100 layout-flex">
     <div th:replace="~{fragments/layout :: topbar}"></div>
-    <div class="d-flex">
+    <div class="layout-body">
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
-        <h3 class="mb-3" th:text="'Bienvenido, ' + ${nombreUsuario}">Bienvenido</h3>
-        <div class="alert alert-info">
-          <strong>Su rol:</strong> <span th:text="${rolUsuario}">ROL</span>. El menú lateral muestra únicamente las opciones permitidas para su rol (RF02).
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Bienvenido, <span th:text="${nombreUsuario}">Usuario</span></h1>
+            <p class="page-subtitle">Panel principal del sistema · Su rol actual: <strong th:text="${rolUsuario}">ROL</strong></p>
+          </div>
+          <div class="d-flex gap-2">
+            <span class="badge bg-info"><i class="bi bi-calendar3"></i>&nbsp; <span id="fechaHoy"></span></span>
+          </div>
         </div>
-        <div class="card mb-3" sec:authorize="hasAnyRole('ALMACENERO','ADMIN')">
-          <div class="card-header bg-warning text-dark d-flex justify-content-between">
-            <strong>Alertas de stock mínimo (RF11)</strong>
-            <span id="nAlertas" class="badge bg-dark">0</span>
+
+        <!-- Stat cards (cargados por JS) -->
+        <div class="row g-3 mb-4" id="statCards">
+          <div class="col-md-3 col-6">
+            <div class="stat-card">
+              <div class="stat-icon bg-primary"><i class="bi bi-box-seam"></i></div>
+              <div class="stat-meta">
+                <p class="stat-label">Materiales</p>
+                <p class="stat-value" id="statMateriales">—</p>
+                <p class="stat-hint">en catálogo</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="stat-card">
+              <div class="stat-icon bg-success"><i class="bi bi-folder2-open"></i></div>
+              <div class="stat-meta">
+                <p class="stat-label">Proyectos</p>
+                <p class="stat-value" id="statProyectos">—</p>
+                <p class="stat-hint">activos</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <div class="stat-card">
+              <div class="stat-icon bg-info"><i class="bi bi-clipboard-data"></i></div>
+              <div class="stat-meta">
+                <p class="stat-label">Solicitudes</p>
+                <p class="stat-value" id="statSolicitudes">—</p>
+                <p class="stat-hint">registradas</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3 col-6" sec:authorize="hasAnyRole('ALMACENERO','ADMIN')">
+            <div class="stat-card">
+              <div class="stat-icon bg-warning"><i class="bi bi-exclamation-triangle"></i></div>
+              <div class="stat-meta">
+                <p class="stat-label">Alertas stock</p>
+                <p class="stat-value" id="statAlertas">—</p>
+                <p class="stat-hint">stock mínimo</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alertas de stock mínimo -->
+        <div class="card mb-4" sec:authorize="hasAnyRole('ALMACENERO','ADMIN')">
+          <div class="card-header bg-warning">
+            <span><i class="bi bi-exclamation-triangle-fill"></i> Alertas de stock mínimo</span>
+            <span class="badge bg-dark" id="nAlertas">0</span>
           </div>
           <div class="card-body">
-            <table class="table table-sm mb-0">
-              <thead><tr><th>Código</th><th>Material</th><th>Stock actual</th><th>Stock mínimo</th></tr></thead>
-              <tbody id="tbodyAlertas"></tbody>
-            </table>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead><tr><th>Código</th><th>Material</th><th>Stock actual</th><th>Stock mínimo</th><th>Deficit</th></tr></thead>
+                <tbody id="tbodyAlertas"></tbody>
+              </table>
+            </div>
           </div>
         </div>
+
+        <!-- Información del sistema -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0"><i class="bi bi-grid-3x3-gap text-primary"></i> Información del sistema</h4>
+        </div>
         <div class="row g-3">
-          <div class="col-md-4"><div class="card p-3"><h5>P1 - Inventario y catálogo</h5><p class="small text-muted">Catálogo, ingreso contra OC y alertas de stock.</p></div></div>
-          <div class="col-md-4"><div class="card p-3"><h5>P2 - Solicitudes y validación</h5><p class="small text-muted">BOM, retención por presupuesto y verificación de stock.</p></div></div>
-          <div class="col-md-4"><div class="card p-3"><h5>P3 - Despacho y entrega</h5><p class="small text-muted">Bandeja, validación de códigos y confirmación del operario.</p></div></div>
-          <div class="col-md-4"><div class="card p-3"><h5>P4 - Calidad y pruebas</h5><p class="small text-muted">Mediciones, rangos técnicos y certificado PDF.</p></div></div>
-          <div class="col-md-4"><div class="card p-3"><h5>P5 - Mermas y devoluciones</h5><p class="small text-muted">Reintegro, validación de baja y reporte.</p></div></div>
-          <div class="col-md-4"><div class="card p-3"><h5>M6 - Trazabilidad</h5><p class="small text-muted">Historial de cada material, sólo inserción.</p></div></div>
+          <div class="col-md-4 col-sm-6">
+            <div class="module-card">
+              <span class="module-tag"><i class="bi bi-box-seam"></i> Inventario</span>
+              <h5>Catálogo y stock</h5>
+              <p>Catálogo de materiales, ingreso contra orden de compra y alertas de stock mínimo en tiempo real.</p>
+            </div>
+          </div>
+          <div class="col-md-4 col-sm-6">
+            <div class="module-card">
+              <span class="module-tag"><i class="bi bi-clipboard-data"></i> Producción</span>
+              <h5>Solicitudes con BOM</h5>
+              <p>Lista de materiales por proyecto, retención por presupuesto y verificación de stock antes del despacho.</p>
+            </div>
+          </div>
+          <div class="col-md-4 col-sm-6">
+            <div class="module-card">
+              <span class="module-tag"><i class="bi bi-truck"></i> Despacho</span>
+              <h5>Despacho y entrega</h5>
+              <p>Bandeja de despachos, validación de códigos por escaneo y confirmación de recepción por el operario.</p>
+            </div>
+          </div>
+          <div class="col-md-4 col-sm-6">
+            <div class="module-card">
+              <span class="module-tag"><i class="bi bi-clipboard-check"></i> Calidad</span>
+              <h5>Pruebas y certificado</h5>
+              <p>Mediciones contra rangos técnicos, registro de resultados y certificado de conformidad PDF.</p>
+            </div>
+          </div>
+          <div class="col-md-4 col-sm-6">
+            <div class="module-card">
+              <span class="module-tag"><i class="bi bi-arrow-counterclockwise"></i> Mermas</span>
+              <h5>Devoluciones y mermas</h5>
+              <p>Reintegro al inventario, validación de baja por jefe de producción y reporte consolidado de mermas.</p>
+            </div>
+          </div>
+          <div class="col-md-4 col-sm-6">
+            <div class="module-card">
+              <span class="module-tag"><i class="bi bi-diagram-3"></i> Trazabilidad</span>
+              <h5>Historial completo</h5>
+              <p>Trazabilidad de cada material desde el ingreso hasta la entrega o baja, registro auditable de sólo inserción.</p>
+            </div>
+          </div>
         </div>
       </main>
     </div>
@@ -38,14 +132,60 @@
 </div>
 <div th:replace="~{fragments/layout :: scripts}"></div>
 <script>
+// Fecha de hoy
+document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+// Carga paralela de stats
 (async () => {
-  if (!['ALMACENERO','ADMIN'].some(r => document.querySelector('.badge.bg-secondary')?.textContent === r)) return;
+  const rolEl = document.querySelector('.badge.bg-secondary') || document.querySelector('.badge-rol');
+  const rol = rolEl ? rolEl.textContent.trim() : '';
+
+  // Materiales (visible para roles con catálogo)
+  if (['ADMIN','ALMACENERO','JEFE_PRODUCCION','JEFE','JEFE DE PRODUCCIÓN'].some(r => rol.includes(r.split(' ')[0]))) {
+    try {
+      const mats = await getJson('/api/almacen/materiales');
+      el('statMateriales').textContent = mats.length;
+    } catch (e) { el('statMateriales').textContent = '0'; }
+  } else {
+    el('statMateriales').textContent = '—';
+  }
+
+  // Proyectos
   try {
-    const lista = await getJson('/api/almacen/alertas-stock');
-    el('nAlertas').textContent = lista.length;
-    el('tbodyAlertas').innerHTML = lista.map(m =>
-      `<tr><td>${esc(m.codigo)}</td><td>${esc(m.nombre)}</td><td class="text-danger"><strong>${m.stockActual}</strong></td><td>${m.stockMinimo}</td></tr>`).join('');
-  } catch(e){ console.error(e); }
+    const proys = await getJson('/api/produccion/proyectos');
+    const activos = proys.filter(p => p.estado !== 'ANULADO' && p.estado !== 'CERRADO');
+    el('statProyectos').textContent = activos.length;
+  } catch (e) { el('statProyectos').textContent = '—'; }
+
+  // Solicitudes
+  try {
+    const sols = await getJson('/api/produccion/solicitudes');
+    el('statSolicitudes').textContent = sols.length;
+  } catch (e) { el('statSolicitudes').textContent = '—'; }
+
+  // Alertas de stock
+  if (['ALMACENERO','ADMIN'].some(r => rol.includes(r))) {
+    try {
+      const lista = await getJson('/api/almacen/alertas-stock');
+      el('nAlertas').textContent = lista.length;
+      el('statAlertas').textContent = lista.length;
+      el('tbodyAlertas').innerHTML = lista.length === 0
+        ? '<tr><td colspan="5" class="text-center text-muted py-3"><i class="bi bi-check-circle"></i> Sin alertas. Todos los materiales están por encima del stock mínimo.</td></tr>'
+        : lista.map(m =>
+            `<tr>
+              <td><strong>${esc(m.codigo)}</strong></td>
+              <td>${esc(m.nombre)}</td>
+              <td class="text-danger"><strong>${m.stockActual}</strong></td>
+              <td>${m.stockMinimo}</td>
+              <td class="text-danger">${Math.max(0, m.stockMinimo - m.stockActual)}</td>
+            </tr>`).join('');
+    } catch (e) {
+      el('statAlertas').textContent = '0';
+      el('nAlertas').textContent = '0';
+    }
+  } else {
+    el('statAlertas').textContent = '—';
+  }
 })();
 </script>
 </body></html>

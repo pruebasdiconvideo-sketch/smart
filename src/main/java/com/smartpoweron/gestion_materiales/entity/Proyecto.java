@@ -20,6 +20,9 @@ public class Proyecto {
     @Column(name = "cliente", nullable = false, length = 150)
     private String cliente;
 
+    @Column(name = "id_empresa")
+    private Long idEmpresa;
+
     @Column(name = "fecha_inicio")
     private LocalDate fechaInicio;
 

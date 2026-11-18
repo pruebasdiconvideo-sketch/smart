@@ -70,7 +70,6 @@ public final class Dtos {
         private String marca;
         private String unidadMedida;
         private String modelo;
-        private String numeroSerie;
         private String mlfb;
         private String pasillo;
         private String estante;
@@ -82,8 +81,17 @@ public final class Dtos {
         private boolean enAlerta;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class CategoriaStockDto {
+        private String categoria;
+        private int numMateriales;
+        private int stockTotal;
+        private int stockMinimoTotal;
+        private BigDecimal valorInventario;
+        private long enAlerta;
+    }
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MaterialCreate {
-        @NotBlank(message = "El código es obligatorio") private String codigo;
+        private String codigo;
         @NotBlank(message = "El nombre es obligatorio") private String nombre;
         private String especificacionTecnica;
         private String descripcion;
@@ -91,7 +99,6 @@ public final class Dtos {
         private String marca;
         private String unidadMedida;
         private String modelo;
-        private String numeroSerie;
         private String mlfb;
         private String pasillo;
         private String estante;
@@ -101,7 +108,7 @@ public final class Dtos {
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class MaterialUpdate {
-        @NotBlank(message = "El código es obligatorio") private String codigo;
+        private String codigo;
         @NotBlank(message = "El nombre es obligatorio") private String nombre;
         private String especificacionTecnica;
         private String descripcion;
@@ -109,7 +116,6 @@ public final class Dtos {
         private String marca;
         private String unidadMedida;
         private String modelo;
-        private String numeroSerie;
         private String mlfb;
         private String pasillo;
         private String estante;
@@ -118,29 +124,82 @@ public final class Dtos {
         @Min(value = 0, message = "El stock mínimo no puede ser negativo") private Integer stockMinimo;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class EmpresaDto {
+        private Long idEmpresa;
+        private String ruc;
+        private String razonSocial;
+        private String razonComercial;
+        private String contactoNombre;
+        private String contactoTelefono;
+        private String contactoCorreo;
+        private String tipo;
+        private String estado;
+        private LocalDateTime fechaRegistro;
+    }
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class EmpresaCreate {
+        @NotBlank(message = "El RUC es obligatorio") private String ruc;
+        @NotBlank(message = "La razón social es obligatoria") private String razonSocial;
+        private String razonComercial;
+        private String contactoNombre;
+        private String contactoTelefono;
+        private String contactoCorreo;
+        @NotBlank(message = "El tipo es obligatorio") private String tipo;
+    }
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class EmpresaUpdate {
+        @NotBlank(message = "El RUC es obligatorio") private String ruc;
+        @NotBlank(message = "La razón social es obligatoria") private String razonSocial;
+        private String razonComercial;
+        private String contactoNombre;
+        private String contactoTelefono;
+        private String contactoCorreo;
+        private String estado;
+    }
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class DetalleOrdenCompraDto {
+        private Long idDetalleOc;
+        private Long idMaterial;
+        private Integer cantidad;
+        private BigDecimal precioUnitario;
+        private String codigoMaterial;
+        private String nombreMaterial;
+        private String categoria;
+        private String unidadMedida;
+    }
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OrdenCompraDto {
         private Long idOrdenCompra;
         private String codigo;
         private String proveedor;
+        private Long idEmpresa;
+        private String rucProveedor;
         private LocalDate fechaEmision;
         private String estado;
+        private List<DetalleOrdenCompraDto> items;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OrdenCompraCreate {
         @NotBlank(message = "El código es obligatorio") private String codigo;
-        @NotBlank(message = "El proveedor es obligatorio") private String proveedor;
+        private String proveedor;
+        private Long idEmpresa;
         @NotNull(message = "La fecha de emisión es obligatoria") private LocalDate fechaEmision;
+        private List<DetalleOrdenCompraDto> items;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class OrdenCompraUpdate {
         @NotBlank(message = "El código es obligatorio") private String codigo;
-        @NotBlank(message = "El proveedor es obligatorio") private String proveedor;
+        private String proveedor;
+        private Long idEmpresa;
         @NotNull(message = "La fecha de emisión es obligatoria") private LocalDate fechaEmision;
+        private List<DetalleOrdenCompraDto> items;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class IngresoItem {
         @NotBlank(message = "El código del material es obligatorio") private String codigo;
-        @NotNull(message = "La cantidad es obligatoria") private Integer cantidad;
+        private Integer cantidad; // opcional cuando se proveen numeroSeries
+        // Informe: "Número de serie único por cada producto". Una serie por unidad ingresada.
+        private List<String> numeroSeries;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class IngresoRequest {
@@ -155,12 +214,31 @@ public final class Dtos {
         private List<String> materialesNoRegistrados;
     }
 
+    // Trazabilidad individual por número de serie (informe)
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class MaterialInstanciaDto {
+        private Long idInstancia;
+        private String numeroSerie;
+        private Long idMaterial;
+        private String codigoMaterial;
+        private String nombreMaterial;
+        private String modelo;
+        private String marca;
+        private String categoria;
+        private Long idOrdenCompra;
+        private String codigoOC;
+        private String fechaIngreso;
+        private String estado;
+    }
+
     // ===== M2 · Producción =====
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProyectoDto {
         private Long idProyecto;
         private String codigo;
         private String cliente;
+        private Long idEmpresa;
+        private String rucCliente;
         private LocalDate fechaInicio;
         private BigDecimal presupuesto;
         private String estado;
@@ -168,7 +246,8 @@ public final class Dtos {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ProyectoCreate {
         @NotBlank(message = "El código es obligatorio") private String codigo;
-        @NotBlank(message = "El cliente es obligatorio") private String cliente;
+        private String cliente;
+        private Long idEmpresa;
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
         @NotNull(message = "La fecha de inicio es obligatoria") private LocalDate fechaInicio;
         @NotNull(message = "El presupuesto es obligatorio") private BigDecimal presupuesto;
@@ -326,6 +405,7 @@ public final class Dtos {
         @NotNull(message = "El parámetro es obligatorio") private Long idParametro;
         @NotNull(message = "El valor medido es obligatorio") private BigDecimal valorMedido;
         private String observacion;
+        private String tecnicoExterno;
     }
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class PruebaCalidadDto {
@@ -341,6 +421,7 @@ public final class Dtos {
         private String resultado;
         private String observacion;
         private String inspector;
+        private String tecnicoExterno;
         private LocalDateTime fechaPrueba;
         private Boolean anulada;
         private String motivoAnulacion;

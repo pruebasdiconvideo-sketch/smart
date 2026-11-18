@@ -37,9 +37,6 @@ public class Material {
     @Column(length = 100)
     private String modelo;
 
-    @Column(name = "numero_serie", length = 100)
-    private String numeroSerie;
-
     @Column(length = 100)
     private String mlfb;
 

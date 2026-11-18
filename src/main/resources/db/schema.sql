@@ -10,6 +10,7 @@
 
 -- Reseteo defensivo (idempotente, sólo cuando se ejecuta desde cero)
 DROP TABLE IF EXISTS trazabilidad;
+DROP TABLE IF EXISTS material_instancia;
 DROP TABLE IF EXISTS merma_devolucion;
 DROP TABLE IF EXISTS prueba_calidad;
 DROP TABLE IF EXISTS parametro_prueba;
@@ -18,9 +19,11 @@ DROP TABLE IF EXISTS detalle_despacho;
 DROP TABLE IF EXISTS despacho;
 DROP TABLE IF EXISTS detalle_solicitud;
 DROP TABLE IF EXISTS solicitud;
+DROP TABLE IF EXISTS detalle_orden_compra;
 DROP TABLE IF EXISTS orden_compra;
 DROP TABLE IF EXISTS material;
 DROP TABLE IF EXISTS proyecto;
+DROP TABLE IF EXISTS empresa;
 DROP TABLE IF EXISTS usuario;
 DROP TABLE IF EXISTS rol_permiso;
 DROP TABLE IF EXISTS permiso;
@@ -63,13 +66,28 @@ CREATE TABLE usuario (
 -- =====================================================================
 -- 2. TABLAS MAESTRAS Y PROYECTOS (P1, P2)
 -- =====================================================================
+CREATE TABLE empresa (
+    id_empresa          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ruc                 VARCHAR(11)  UNIQUE NOT NULL,
+    razon_social        VARCHAR(180) NOT NULL,
+    razon_comercial     VARCHAR(180),
+    contacto_nombre     VARCHAR(150),
+    contacto_telefono   VARCHAR(30),
+    contacto_correo     VARCHAR(120),
+    tipo                VARCHAR(15)  NOT NULL CHECK (tipo IN ('PROVEEDOR','CLIENTE')),
+    estado              VARCHAR(20)  DEFAULT 'ACTIVO',
+    fecha_registro      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE proyecto (
     id_proyecto   BIGINT AUTO_INCREMENT PRIMARY KEY,
     codigo        VARCHAR(50)  UNIQUE NOT NULL,
     cliente       VARCHAR(150) NOT NULL,
+    id_empresa    BIGINT,
     fecha_inicio  DATE,
     presupuesto   DECIMAL(12,2) NOT NULL CHECK (presupuesto > 0),
-    estado        VARCHAR(30)  DEFAULT 'EN_PROCESO'
+    estado        VARCHAR(30)  DEFAULT 'EN_PROCESO',
+    FOREIGN KEY (id_empresa) REFERENCES empresa(id_empresa)
 );
 
 CREATE TABLE material (
@@ -82,7 +100,6 @@ CREATE TABLE material (
     marca                VARCHAR(50),
     unidad_medida        VARCHAR(20),
     modelo               VARCHAR(100),
-    numero_serie         VARCHAR(100),
     mlfb                 VARCHAR(100),
     pasillo              VARCHAR(20),
     estante              VARCHAR(20),
@@ -97,8 +114,20 @@ CREATE TABLE orden_compra (
     id_orden_compra  BIGINT AUTO_INCREMENT PRIMARY KEY,
     codigo           VARCHAR(50)  UNIQUE NOT NULL,
     proveedor        VARCHAR(150) NOT NULL,
+    id_empresa       BIGINT,
     fecha_emision    DATE NOT NULL,
-    estado           VARCHAR(30)  DEFAULT 'ABIERTA' CHECK (estado IN ('ABIERTA', 'CERRADA'))
+    estado           VARCHAR(30)  DEFAULT 'ABIERTA' CHECK (estado IN ('ABIERTA', 'CERRADA')),
+    FOREIGN KEY (id_empresa) REFERENCES empresa(id_empresa)
+);
+
+CREATE TABLE detalle_orden_compra (
+    id_detalle_oc     BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_orden_compra   BIGINT NOT NULL,
+    id_material       BIGINT NOT NULL,
+    cantidad          INT NOT NULL CHECK (cantidad > 0),
+    precio_unitario   DECIMAL(12,2),
+    FOREIGN KEY (id_orden_compra) REFERENCES orden_compra(id_orden_compra),
+    FOREIGN KEY (id_material)     REFERENCES material(id_material)
 );
 
 -- =====================================================================
@@ -191,6 +220,7 @@ CREATE TABLE prueba_calidad (
     fecha_prueba         DATETIME DEFAULT CURRENT_TIMESTAMP,
     anulada              BOOLEAN NOT NULL DEFAULT FALSE,
     motivo_anulacion     TEXT,
+    tecnico_externo      VARCHAR(150),
     FOREIGN KEY (id_proyecto)          REFERENCES proyecto(id_proyecto),
     FOREIGN KEY (id_parametro)         REFERENCES parametro_prueba(id_parametro),
     FOREIGN KEY (id_usuario_inspector) REFERENCES usuario(id_usuario)
@@ -231,6 +261,23 @@ CREATE TABLE trazabilidad (
     FOREIGN KEY (id_usuario)      REFERENCES usuario(id_usuario),
     FOREIGN KEY (id_proyecto)     REFERENCES proyecto(id_proyecto),
     FOREIGN KEY (id_orden_compra) REFERENCES orden_compra(id_orden_compra)
+);
+
+-- Instancia física de un material (una unidad) identificada por número de serie único.
+-- Se crea al ingresar material contra una OC; da trazabilidad individual por unidad.
+-- El stock consolidado por modelo/código/marca vive en material.stock_actual.
+CREATE TABLE material_instancia (
+    id_instancia       BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_material        BIGINT NOT NULL,
+    numero_serie       VARCHAR(100) NOT NULL,
+    id_orden_compra    BIGINT,
+    fecha_ingreso      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id_usuario         BIGINT,
+    estado             VARCHAR(20) DEFAULT 'EN_ALMACEN' CHECK (estado IN ('EN_ALMACEN','SALIDA','MERMADO')),
+    UNIQUE KEY uk_instancia_numero_serie (numero_serie),
+    FOREIGN KEY (id_material)     REFERENCES material(id_material),
+    FOREIGN KEY (id_orden_compra) REFERENCES orden_compra(id_orden_compra),
+    FOREIGN KEY (id_usuario)      REFERENCES usuario(id_usuario)
 );
 
 -- =====================================================================

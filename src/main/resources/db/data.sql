@@ -81,17 +81,34 @@ INSERT INTO material (id_material, codigo, nombre, especificacion_tecnica, categ
  (9,'TERMO-25','Termóstato 25°C','Termostato de carcasa NO 25°C','CLIMATIZACION',45.00,6,3),
  (10,'RESIST-100W','Resistencia 100W','Resistencia anticondensación 100W','CLIMATIZACION',38.00,4,3);
 
+-- EMPRESAS (proveedores y clientes registrados)
+INSERT INTO empresa (id_empresa, ruc, razon_social, razon_comercial, contacto_nombre, contacto_telefono, contacto_correo, tipo, estado) VALUES
+ (1,'20100129623','Siemens Perú S.A.',        'SIEMENS Perú',           'Juan Pérez',     '987654321', 'ventas@siemens.pe',        'PROVEEDOR','ACTIVO'),
+ (2,'20512345678','Eléctrica del Perú S.A.C.', 'Eléctrica del Perú',     'María López',    '987123456', 'ventas@electrica.pe',      'PROVEEDOR','ACTIVO'),
+ (3,'20498765432','Distribuidora Norte S.A.', 'Distribuidora Norte',    'Carlos Ruiz',    '986654321', 'ventas@norte.pe',          'PROVEEDOR','ACTIVO'),
+ (4,'20141080693','Minera Yanacocha S.R.L.',  'Yanacocha',              'Pedro Aguilar',  '999888777', 'logistica@yanacocha.com',  'CLIENTE','ACTIVO'),
+ (5,'20100017491','Luz del Sur S.A.A.',       'Luz del Sur',            'Ana Torres',     '999777666', 'compras@luzdelsur.com.pe', 'CLIENTE','ACTIVO'),
+ (6,'20100128005','Sedapal S.A.',             'Sedapal',                'Luis Ramírez',   '999666555', 'compras@sedapal.com.pe',   'CLIENTE','ACTIVO');
+
 -- ÓRDENES DE COMPRA (dos ABIERTAS + una CERRADA para PF-13)
-INSERT INTO orden_compra (id_orden_compra, codigo, proveedor, fecha_emision, estado) VALUES
- (1,'OC-2026-001','SIEMENS Perú S.A.',    '2026-10-15','ABIERTA'),
- (2,'OC-2026-002','Eléctrica del Perú',   '2026-11-02','ABIERTA'),
- (3,'OC-2026-003','Distribuidora Norte',  '2026-09-10','CERRADA');
+INSERT INTO orden_compra (id_orden_compra, codigo, proveedor, id_empresa, fecha_emision, estado) VALUES
+ (1,'OC-2026-001','Siemens Perú S.A.',        1, '2026-10-15','ABIERTA'),
+ (2,'OC-2026-002','Eléctrica del Perú S.A.C.',2, '2026-11-02','ABIERTA'),
+ (3,'OC-2026-003','Distribuidora Norte S.A.', 3, '2026-09-10','CERRADA');
+
+-- DETALLE DE ÓRDENES DE COMPRA (una OC puede tener varios materiales de varias categorías)
+INSERT INTO detalle_orden_compra (id_detalle_oc, id_orden_compra, id_material, cantidad, precio_unitario) VALUES
+ (1, 1, 1, 20, 980.00),
+ (2, 1, 4, 15, 45.00),
+ (3, 2, 2, 10, 1200.00),
+ (4, 2, 5, 30, 3.50),
+ (5, 3, 3, 25, 650.00);
 
 -- PROYECTOS
-INSERT INTO proyecto (id_proyecto, codigo, cliente, fecha_inicio, presupuesto, estado) VALUES
- (1,'TAB-2026-001','Minera Yanacocha',   '2026-10-01', 18000.00,'EN_PROCESO'),
- (2,'TAB-2026-002','Luz del Sur S.A.A.', '2026-11-05',  9500.00,'EN_PROCESO'),
- (3,'TAB-2026-003','Sedapal',            '2026-11-12', 12500.00,'EN_PROCESO');
+INSERT INTO proyecto (id_proyecto, codigo, cliente, id_empresa, fecha_inicio, presupuesto, estado) VALUES
+ (1,'TAB-2026-001','Minera Yanacocha S.R.L.', 4, '2026-10-01', 18000.00,'EN_PROCESO'),
+ (2,'TAB-2026-002','Luz del Sur S.A.A.',      5, '2026-11-05',  9500.00,'EN_PROCESO'),
+ (3,'TAB-2026-003','Sedapal S.A.',            6, '2026-11-12', 12500.00,'EN_PROCESO');
 
 -- PARÁMETROS DE PRUEBA (rangos técnicos, P4-RN03 / RF30)
 INSERT INTO parametro_prueba (id_parametro, tipo_prueba, unidad, valor_minimo, valor_maximo, norma_referencia) VALUES

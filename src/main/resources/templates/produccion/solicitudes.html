@@ -9,7 +9,7 @@
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
         <h3 class="mb-1">Solicitud de materiales con BOM</h3>
-        <p class="text-muted small mb-3">P2-T03 a P2-T09 · RF13-RF18</p>
+        <p class="text-muted small mb-3">Cree solicitudes de materiales con lista de materiales (BOM) por proyecto.</p>
         <div class="card"><div class="card-body"><div id="contenido"></div></div></div>
       </main>
     </div>
@@ -38,7 +38,7 @@
         <td><button class="btn btn-sm btn-link" onclick="verDetalle(${s.idSolicitud})">Detalle</button>
           ${s.editable?`<button class="btn btn-sm btn-outline-primary me-1" onclick="editarSolicitud(${s.idSolicitud})">Editar</button>`:''}
           ${!s.anulada?`<button class="btn btn-sm btn-outline-danger me-1" onclick="anularSolicitud(${s.idSolicitud})">Anular</button>`:''}
-          ${!s.anulada && !['DESPACHADA','RECHAZADA'].includes(s.estado)?`<button class="btn btn-sm btn-link" onclick="verificar(${s.idSolicitud})" title="RF17/RF18">Verificar stock</button>`:''}
+          ${!s.anulada && !['DESPACHADA','RECHAZADA'].includes(s.estado)?`<button class="btn btn-sm btn-link" onclick="verificar(${s.idSolicitud})" title="Verificar stock disponible">Verificar stock</button>`:''}
         </td>
       </tr>`).join('')}</tbody></table></div>
       <div id="formSolicitud" class="card p-3 mb-3" style="display:none">

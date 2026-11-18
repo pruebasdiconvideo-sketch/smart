@@ -103,4 +103,39 @@ public class AlmacenApiController {
     public ResponseEntity<List<Dtos.MaterialDto>> alertasStock() {
         return ResponseEntity.ok(materialService.listarAlertas());
     }
+
+    // Stock agrupado por categoria
+    @GetMapping("/categorias")
+    public ResponseEntity<List<Dtos.CategoriaStockDto>> stockPorCategoria() {
+        return ResponseEntity.ok(materialService.stockPorCategoria());
+    }
+
+    // Lista de categorias disponibles (para dropdowns de filtros)
+    @GetMapping("/categorias-lista")
+    public ResponseEntity<List<String>> categoriasDisponibles() {
+        return ResponseEntity.ok(materialService.categoriasDisponibles());
+    }
+
+    // Trazabilidad individual por número de serie (informe).
+    // Uso: GET /api/almacen/instancias?serie=SN-001  → una instancia
+    //      GET /api/almacen/instancias?material={id} → listado por material
+    @GetMapping("/instancias")
+    public ResponseEntity<?> instancias(
+            @RequestParam(required = false) String serie,
+            @RequestParam(required = false) Long material) {
+        if (serie != null && !serie.isBlank()) {
+            Dtos.MaterialInstanciaDto dto = materialService.buscarInstanciaPorSerie(serie);
+            return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
+        }
+        if (material != null) {
+            return ResponseEntity.ok(materialService.listarInstanciasPorMaterial(material));
+        }
+        return ResponseEntity.badRequest().build();
+    }
+
+    // Preview del proximo codigo automatico segun categoria
+    @GetMapping("/materiales/siguiente-codigo")
+    public ResponseEntity<java.util.Map<String, String>> siguienteCodigo(@RequestParam String categoria) {
+        return ResponseEntity.ok(java.util.Map.of("codigo", materialService.siguienteCodigo(categoria)));
+    }
 }

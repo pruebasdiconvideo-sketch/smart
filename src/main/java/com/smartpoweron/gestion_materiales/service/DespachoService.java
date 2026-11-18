@@ -38,6 +38,7 @@ public class DespachoService {
     private final TrazabilidadService trazabilidadService;
     private final SecurityUtil securityUtil;
     private final SolicitudService solicitudService;
+    private final MaterialService materialService;
 
     public DespachoService(DespachoRepository despachoRepo,
                            DetalleDespachoRepository detalleDespRepo,
@@ -49,7 +50,8 @@ public class DespachoService {
                            ProyectoRepository proyectoRepo,
                            TrazabilidadService trazabilidadService,
                            SecurityUtil securityUtil,
-                           SolicitudService solicitudService) {
+                           SolicitudService solicitudService,
+                           MaterialService materialService) {
         this.despachoRepo = despachoRepo;
         this.detalleDespRepo = detalleDespRepo;
         this.detalleSolRepo = detalleSolRepo;
@@ -61,6 +63,7 @@ public class DespachoService {
         this.trazabilidadService = trazabilidadService;
         this.securityUtil = securityUtil;
         this.solicitudService = solicitudService;
+        this.materialService = materialService;
     }
 
     // ===== RF19 - bandeja de despachos =====
@@ -299,6 +302,8 @@ public class DespachoService {
             }
             m.setStockActual(m.getStockActual() - dd.getCantidadEntregada());
             materialRepo.save(m);
+            // Trazabilidad individual: marcar instancias como SALIDA (FIFO best-effort)
+            materialService.marcarSalidaInstancias(m.getIdMaterial(), dd.getCantidadEntregada());
             // Actualizar cantidad despachada de la línea
             DetalleSolicitud ds = detalleSolRepo.findById(dd.getIdDetalleSolicitud()).orElseThrow();
             if (ds.getCantidadDespachada() + dd.getCantidadEntregada() > ds.getCantidadSolicitada()) {

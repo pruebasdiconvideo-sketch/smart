@@ -1,0 +1,107 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security6">
+<head th:replace="~{fragments/layout :: head('Stock por categoría')}"></head>
+<body>
+<div class="layout">
+  <div class="w-100">
+    <div th:replace="~{fragments/layout :: topbar}"></div>
+    <div class="d-flex">
+      <div th:replace="~{fragments/layout :: menu}"></div>
+      <main class="content">
+        <h3 class="mb-1">Stock por categoría</h3>
+        <p class="text-muted small mb-3">Resumen del inventario agrupado por categoría de material.</p>
+
+        <div class="row g-3 mb-4" id="statCards"></div>
+
+        <div class="card">
+          <div class="card-body">
+            <form class="row g-2 mb-3" id="filtros">
+              <div class="col-md-6">
+                <label class="form-label small text-muted">Filtrar categoría</label>
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input class="form-control" id="fCat" placeholder="Nombre de categoría"/>
+                </div>
+              </div>
+              <div class="col-md-2 d-flex align-items-end gap-2">
+                <button class="btn btn-outline-primary" type="submit">Filtrar</button>
+                <button class="btn btn-outline-secondary" type="button" id="limpiar">Limpiar</button>
+              </div>
+            </form>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead><tr>
+                  <th>Categoría</th><th>Materiales</th><th>Stock disponible</th><th>Stock mínimo</th>
+                  <th>Valor inventario</th><th>En alerta</th><th>Cobertura</th>
+                </tr></thead>
+                <tbody id="tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+(async () => {
+  let datos = [];
+
+  function fmt(v) {
+    return Number(v).toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  function cobertura(stock, min) {
+    if (!min || min === 0) return 100;
+    return Math.round((stock / min) * 100);
+  }
+
+  function barra(pct) {
+    const cls = pct >= 100 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-danger';
+    return `<div class="progress" style="height:18px;min-width:140px"><div class="progress-bar ${cls}" style="width:${Math.min(pct,100)}%">${pct}%</div></div>`;
+  }
+
+  function dibujarTabla(lista) {
+    el('tbody').innerHTML = lista.length ? lista.map(c => `<tr>
+      <td><strong>${esc(c.categoria)}</strong></td>
+      <td>${c.numMateriales}</td>
+      <td class="${c.stockTotal <= c.stockMinimoTotal ? 'text-danger fw-bold' : ''}">${c.stockTotal}</td>
+      <td>${c.stockMinimoTotal}</td>
+      <td>S/ ${fmt(c.valorInventario)}</td>
+      <td>${c.enAlerta > 0 ? `<span class="badge bg-danger">${c.enAlerta}</span>` : '<span class="badge bg-success">0</span>'}</td>
+      <td>${barra(cobertura(c.stockTotal, c.stockMinimoTotal))}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted py-4">Sin datos.</td></tr>';
+  }
+
+  function dibujarStatCards(lista) {
+    const totalStock = lista.reduce((s,c) => s + c.stockTotal, 0);
+    const totalValor = lista.reduce((s,c) => s + Number(c.valorInventario), 0);
+    const totalAlertas = lista.reduce((s,c) => s + c.enAlerta, 0);
+    el('statCards').innerHTML = `
+      <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Categorías</div><div class="stat-value">${lista.length}</div></div></div>
+      <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Stock disponible (unidades)</div><div class="stat-value">${totalStock}</div></div></div>
+      <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Valor inventario</div><div class="stat-value">S/ ${fmt(totalValor)}</div></div></div>
+      <div class="col-md-3 col-sm-6"><div class="stat-card"><div class="stat-label">Materiales en alerta</div><div class="stat-value ${totalAlertas>0?'text-danger':''}">${totalAlertas}</div></div></div>`;
+  }
+
+  function filtrar() {
+    const cat = el('fCat').value.trim().toLowerCase();
+    const f = datos.filter(c => !cat || c.categoria.toLowerCase().includes(cat));
+    dibujarTabla(f);
+  }
+
+  el('filtros').onsubmit = e => { e.preventDefault(); filtrar(); };
+  el('limpiar').onclick = () => { el('fCat').value=''; dibujarTabla(datos); };
+  el('fCat').addEventListener('input', filtrar);
+
+  try {
+    datos = await getJson('/api/almacen/categorias');
+    dibujarStatCards(datos);
+    dibujarTabla(datos);
+  } catch(e) {
+    el('tbody').innerHTML = `<tr><td colspan="7" class="text-danger py-3">${esc(e.message)}</td></tr>`;
+  }
+})();
+</script>
+</body></html>

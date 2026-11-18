@@ -61,6 +61,14 @@ public class GlobalExceptionHandler {
                 "La operación viola una restricción de la base de datos.");
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> recursoNoEncontrado(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        // Recurso estático inexistente (favicon.ico, etc.) -> 404, no 500.
+        return respuesta(HttpStatus.NOT_FOUND, "No encontrado",
+                "El recurso '" + ex.getResourcePath() + "' no existe.");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> general(Exception ex) {
         return respuesta(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno",

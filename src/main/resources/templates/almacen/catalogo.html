@@ -9,7 +9,7 @@
       <div th:replace="~{fragments/layout :: menu}"></div>
       <main class="content">
         <h3 class="mb-1">Catálogo de materiales</h3>
-        <p class="text-muted small mb-3">P1-T05, P1-T10, P1-T11 · RF05, RF06, RF07</p>
+        <p class="text-muted small mb-3">Administre el catalogo de materiales, stock y ubicaciones en almacen.</p>
         <div class="card">
           <div class="card-body">
             <span id="puedeEditar" sec:authorize="hasAnyRole('ALMACENERO','ADMIN')" hidden></span>
@@ -25,25 +25,34 @@
 (async () => {
   const puedeEditar = Boolean(el('puedeEditar'));
   const campos = [
-    ['codigo', 'Código', 'text', true], ['nombre', 'Nombre', 'text', true],
+    ['codigo', 'Código', 'text', false], ['nombre', 'Nombre', 'text', true],
     ['especificacionTecnica', 'Especificación técnica', 'text', false],
     ['descripcion', 'Descripción', 'text', false], ['categoria', 'Categoría', 'text', false],
     ['marca', 'Marca', 'text', false], ['unidadMedida', 'Unidad de medida', 'text', false],
-    ['modelo', 'Modelo', 'text', false], ['numeroSerie', 'Número de serie', 'text', false],
+    ['modelo', 'Modelo', 'text', false],
     ['mlfb', 'MLFB', 'text', false], ['pasillo', 'Pasillo', 'text', false],
     ['estante', 'Estante', 'text', false], ['nivel', 'Nivel', 'text', false],
     ['precioUnitario', 'Precio unitario', 'number', true], ['stockMinimo', 'Stock mínimo', 'number', true]
   ];
   let materiales = [];
+  let categoriasLista = [];
   let materialEditando = null;
   const valorCampos = m => Object.fromEntries(campos.map(([id]) => [id, m[id] ?? '']));
 
   function dibujar(lista) {
-    const camposFormulario = campos.map(([id, label, type, required]) => `
-      <div class="col-md-4"><label class="form-label" for="material-${id}">${label}</label>
-      <input class="form-control" id="material-${id}" type="${type}" ${required ? 'required' : ''}
-        ${type === 'number' ? (id === 'precioUnitario' ? 'min="0" step="0.01"' : 'min="0" step="1"') : ''}
-        placeholder="${label}"/></div>`).join('');
+    const camposFormulario = campos.map(([id, label, type, required]) => {
+      const esCodigo = id === 'codigo';
+      const esCategoria = id === 'categoria';
+      const extra = type === 'number' ? (id === 'precioUnitario' ? 'min="0" step="0.01"' : 'min="0" step="1"') : '';
+      const ro = esCodigo ? 'readonly' : '';
+      const list = esCategoria ? 'list="dlCategorias"' : '';
+      const ph = esCodigo ? 'Se genera según la categoría' : label;
+      const hint = esCodigo ? '<div class="form-text" id="codigoPreview"></div>' : '';
+      return `<div class="col-md-4"><label class="form-label" for="material-${id}">${label}</label>
+        <input class="form-control" id="material-${id}" type="${type}" ${required ? 'required' : ''} ${ro} ${extra} ${list}
+        placeholder="${ph}"/>${hint}</div>`;
+    }).join('');
+    const dlCats = `<datalist id="dlCategorias">${categoriasLista.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`;
     el('contenido').innerHTML = `
       ${puedeEditar ? '<button class="btn btn-primary mb-3" id="nuevoMaterial">Nuevo material</button>' : ''}
       <form class="row g-2 mb-3" id="filtros">
@@ -68,7 +77,7 @@
         </tr>`).join('')}</tbody></table></div>
       ${puedeEditar ? `<div id="formMaterial" class="card p-3 mt-3" style="display:none">
         <h6 id="tituloMaterial">Nuevo material</h6><form id="datosMaterial" class="row g-2">
-          ${camposFormulario}
+          ${camposFormulario}${dlCats}
           <div class="col-12"><button class="btn btn-primary" type="submit">Guardar</button>
             <button class="btn btn-secondary" type="button" id="cancelarMaterial">Cancelar</button></div>
         </form></div>` : ''}`;
@@ -100,6 +109,21 @@
         window.location.reload();
       } catch (e) { alert(e.message); }
     };
+    // Preview del código automático según categoría (solo al crear nuevo)
+    const inpCat = el('material-categoria');
+    if (inpCat) {
+      inpCat.addEventListener('input', async () => {
+        const prev = el('codigoPreview');
+        if (!prev) return;
+        if (materialEditando !== null) { prev.innerHTML = ''; return; }
+        const cat = inpCat.value.trim();
+        if (!cat) { prev.innerHTML = ''; return; }
+        try {
+          const data = await getJson('/api/almacen/materiales/siguiente-codigo?categoria=' + encodeURIComponent(cat));
+          prev.innerHTML = '<i class="bi bi-magic"></i> Próximo código: <strong>' + esc(data.codigo) + '</strong>';
+        } catch(e) { prev.innerHTML = ''; }
+      });
+    }
   }
 
   function abrirFormulario(m, mostrar = true) {
@@ -115,6 +139,7 @@
   }
 
   try {
+    try { categoriasLista = await getJson('/api/almacen/categorias-lista'); } catch(e) {}
     materiales = await getJson('/api/almacen/materiales?incluirInactivos=true');
     dibujar(materiales);
     window.editarMaterial = id => {
