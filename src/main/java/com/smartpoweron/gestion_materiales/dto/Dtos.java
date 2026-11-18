@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class Dtos {
@@ -21,8 +22,9 @@ public class Dtos {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class LoginResponse {
         private String token;
+        private Long idUsuario;      // <-- Añadido
         private String username;
-        private String nombreCompleto; // <-- Faltaba
+        private String nombreCompleto; // <-- Añadido
         private String rol;
     }
 
@@ -32,9 +34,10 @@ public class Dtos {
         private String username;
         private String nombreCompleto;
         private String correo;
-        private Long idRol; // <-- Faltaba
+        private Long idRol;          // <-- Añadido
         private String rol;
         private Boolean activo;
+        private LocalDateTime ultimoAcceso; // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -76,7 +79,7 @@ public class Dtos {
         private String ruc;
         private String razonSocial;
         private String razonComercial;
-        private String tipo; // <-- Faltaba
+        private String tipo;         // <-- Añadido
         private String contactoNombre;
         private String contactoTelefono;
         private String contactoCorreo;
@@ -91,7 +94,7 @@ public class Dtos {
         private String contactoNombre;
         private String contactoTelefono;
         private String contactoCorreo;
-        private String estado; // <-- Faltaba
+        private String estado;
     }
 
     // --- Materiales ---
@@ -111,9 +114,10 @@ public class Dtos {
         private Integer stockActual;
         private Integer stockMinimo;
         private String estado;
-        private String pasillo; // <-- Faltaba
+        private String pasillo;
         private String estante;
         private String nivel;
+        private boolean enAlerta;    // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -157,15 +161,17 @@ public class Dtos {
         private Long idInstancia;
         private String numeroSerie;
         private Long idMaterial;
-        private String codigoMaterial; // <-- Faltaba
+        private String codigoMaterial;   // <-- Añadido
+        private String nombreMaterial;   // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CategoriaStockDto {
         private String categoria;
         private Integer stockTotal;
+        private Integer stockMinimoTotal; // <-- Añadido
         private Integer numMateriales;
-        private Integer stockMinimoTotal; // <-- Faltaba
+        private BigDecimal valorInventario; // <-- Añadido
     }
 
     // --- Órdenes de Compra ---
@@ -174,10 +180,11 @@ public class Dtos {
         private Long idOrdenCompra;
         private String codigo;
         private String proveedor;
-        private String rucProveedor; // <-- Faltaba
+        private String rucProveedor;
         private Long idEmpresa;
         private LocalDate fechaEmision;
         private String estado;
+        private List<DetalleOrdenCompraDto> items; // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -201,8 +208,9 @@ public class Dtos {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DetalleOrdenCompraDto {
         private Long idDetalle;
-        private Long idDetalleOc; // <-- Faltaba (aunque no es común, el servicio lo pide)
+        private Long idDetalleOc;      // <-- Añadido
         private Long idMaterial;
+        private String codigoMaterial;  // <-- Añadido
         private Integer cantidad;
         private BigDecimal precioUnitario;
     }
@@ -225,7 +233,8 @@ public class Dtos {
         private boolean exito;
         private String mensaje;
         private Integer nuevoStock;
-        private List<String> detalle; // <-- Faltaba
+        private List<String> detalle;
+        private List<String> materialesNoRegistrados; // <-- Añadido
     }
 
     // --- Proyectos y Solicitudes ---
@@ -234,7 +243,7 @@ public class Dtos {
         private Long idProyecto;
         private String codigo;
         private String cliente;
-        private String rucCliente; // <-- Faltaba
+        private String rucCliente; // <-- Añadido
         private Long idEmpresa;
         private LocalDate fechaInicio;
         private Double presupuesto;
@@ -247,7 +256,7 @@ public class Dtos {
         private String cliente;
         private Long idEmpresa;
         private LocalDate fechaInicio;
-        private Double presupuesto; // <-- Ojo: en el test se usa BigDecimal
+        private Double presupuesto; // Ojo: el test usa BigDecimal, pero el servicio parece usar Double
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -255,7 +264,8 @@ public class Dtos {
         private Long idSolicitud;
         private Long idProyecto;
         private String codigoProyecto;
-        private String cliente; // <-- Faltaba
+        private String cliente;            // <-- Añadido
+        private Long idUsuarioSolicitante; // <-- Añadido
         private String estado;
         private Boolean anulada;
         private List<DetalleSolicitudDto> detalle;
@@ -276,10 +286,11 @@ public class Dtos {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class DetalleSolicitudDto {
         private Long idDetalle;
-        private Long idDetalleSolicitud; // <-- Faltaba
+        private Long idDetalleSolicitud;  // <-- Añadido
         private Long idMaterial;
+        private String codigoMaterial;     // <-- Añadido
         private Integer cantidad;
-        private Integer cantidadSolicitada; // <-- Faltaba (usado en tests)
+        private Integer cantidadSolicitada; // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -291,7 +302,8 @@ public class Dtos {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class FaltanteDto {
         private Long idMaterial;
-        private String codigo; // <-- Faltaba
+        private String codigo;
+        private String nombre;            // <-- Añadido
         private String codigoMaterial;
         private Integer cantidadFaltante;
     }
@@ -301,8 +313,9 @@ public class Dtos {
     public static class PruebaCalidadDto {
         private Long idPrueba;
         private Long idProyecto;
-        private String codigoProyecto; // <-- Faltaba
+        private String codigoProyecto;
         private Long idParametro;
+        private String tipoPrueba;   // <-- Añadido
         private BigDecimal valorMedido;
         private String estado;
         private Boolean anulada;
@@ -322,7 +335,9 @@ public class Dtos {
         private Long idParametro;
         private String nombre;
         private String tipoPrueba;
-        private String unidad; // <-- Faltaba
+        private String unidad;         // <-- Añadido
+        private BigDecimal valorMinimo; // <-- Añadido
+        private BigDecimal valorMaximo; // <-- Añadido
         private Boolean activo;
     }
 
@@ -351,7 +366,8 @@ public class Dtos {
     public static class BandejaItemDto {
         private Long idSolicitud;
         private String codigoProyecto;
-        private String cliente; // <-- Faltaba
+        private String cliente;
+        private LocalDateTime fechaSolicitud; // <-- Añadido
         private String estado;
     }
 
@@ -373,9 +389,10 @@ public class Dtos {
     public static class DespachoDto {
         private Long idDespacho;
         private Long idSolicitud;
-        private String codigoProyecto; // <-- Faltaba
+        private String codigoProyecto;
         private String tipo;
         private String estado;
+        private Boolean anulado;   // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -395,14 +412,16 @@ public class Dtos {
     public static class PendienteConfirmacionDto {
         private Long idDespacho;
         private Long idSolicitud;
-        private String codigoProyecto; // <-- Faltaba
+        private String codigoProyecto;
         private String proyecto;
+        private LocalDateTime fechaDespacho; // <-- Añadido
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ItemDespachoDto {
         private Long idDetalle;
-        private Long idDetalleDespacho; // <-- Faltaba
+        private Long idDetalleDespacho;
+        private Long idDetalleSolicitud; // <-- Añadido
         private String codigoMaterial;
         private Integer cantidad;
     }
@@ -443,7 +462,8 @@ public class Dtos {
         private String codigoProyecto;
         private Long idMaterial;
         private String codigoMaterial;
-        private String nombreMaterial; // <-- Faltaba
+        private String nombreMaterial;
+        private String tipo; // <-- Añadido
     }
 
     // --- Trazabilidad ---
@@ -452,7 +472,8 @@ public class Dtos {
         private Long idTrazabilidad;
         private String codigoMaterial;
         private String nombreMaterial;
-        private String tipoMovimiento; // <-- Faltaba
+        private String tipoMovimiento;
         private String accion;
+        private Integer cantidad; // <-- Añadido
     }
 }

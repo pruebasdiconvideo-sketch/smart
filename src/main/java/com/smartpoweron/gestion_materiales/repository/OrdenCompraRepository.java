@@ -7,6 +7,6 @@ import java.util.Optional;
 
 public interface OrdenCompraRepository extends JpaRepository<OrdenCompra, Long> {
     Optional<OrdenCompra> findByCodigo(String codigo);
-    List<OrdenCompra> findByEstado(String estado); // <-- Faltaba
-    boolean existsByCodigoAndIdOrdenCompraNot(String codigo, Long id); // <-- Faltaba
+    List<OrdenCompra> findByEstado(String estado); // <-- Añadido
+    boolean existsByCodigoAndIdOrdenCompraNot(String codigo, Long id); // <-- Añadido
 }
